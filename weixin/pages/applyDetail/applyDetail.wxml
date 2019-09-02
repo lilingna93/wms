@@ -1,0 +1,43 @@
+<!--pages/purchaseDetail/applyDetail.wxml-->
+<view>
+  <view class='detail-info'>
+    <view class='detail-info-msg'>
+      <text>单号：{{orderDetail.invCode}}</text>
+      <text>{{orderDetail.invStatMsg}}</text>
+    </view>
+    <text class='detail-info-time'>时间：{{orderDetail.invCtime}}</text>
+  </view>
+     <scroll-view scroll-y = 'true' style='padding:106rpx 0 92rpx;'>
+        <view class='detail-list'  wx:for="{{orderDetail.list}}" wx:key="{{index}}">
+         <view class="detail-list_warpper">
+          <image src="{{baseImgPath}}{{item.spCode}}.jpg?spImg"></image>
+          <view class='detail-txt'>
+            <text class='goods-name'>{{item.skName}}</text>
+            <view class='goods-norm'>
+              <text>{{item.spNorm}}</text>
+              <text>{{item.count}}{{item.spUnit}}</text>
+            </view>
+          </view>
+         </view> 
+         <view style="padding:0 20rpx 4rpx 20rpx;display:flex;justify-content:space-between;font-size:30rpx;" wx:if="{{ item.isUpdate }}">
+          <text  style="text-decoration:underline;color:#007fff;"  bindtap='goReturnGoods' data-index="{{index}}">货品详情</text>
+        </view> 
+        </view>
+      </scroll-view> 
+       <i-modal title="取消订单" visible="{{ calcelModal }}" bind:ok="handleCancel" bind:cancel="handleClose">
+    <view>确定要取消此订单吗？</view>
+  </i-modal>
+  <view class='operation-warpper'  wx:if="{{ orderDetail.invStatus==1 }}">
+    <view class='operation-btn operation-cancel' bindtap='cancelTap'>
+      取消订单
+    </view>
+    <view class='operation-btn operation-contact'  bindtap='callContact'>
+      联系客服
+    </view>
+  </view>
+  <view class='btn-warpper' bindtap='callContact' wx:else>
+      <button class='contact-btn'>
+          联系客服
+      </button>
+  </view>
+</view>

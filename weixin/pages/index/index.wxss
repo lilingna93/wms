@@ -1,0 +1,2 @@
+/**index.wxss**/
+.info{position:fixed;bottom:0;left:0;right:0;font-size: 40px;color:#000;text-align: center;z-index: 1000;}

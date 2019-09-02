@@ -1,0 +1,49 @@
+<!--pages/order/order.wxml-->
+<view>
+  <view class='tabs-box'>
+    <block  wx:for="{{['全部','已领取','已取消']}}" wx:key="id">
+      <view class="tabs-item {{currentTabsIndex==index?'selected':''}}" bindtap='onTabsItemTap' data-index='{{index}}'>
+        {{item}}
+      </view>
+    </block>
+  </view>
+  <view>
+    <scroll-view class='scroll-warpper'  style="height:{{scrollHeight}}px;" scroll-y = 'true' bindscrolltolower="loadMore"  scroll-top="{{scrollTop}}">
+         <!-- <i-spin  size="small"></i-spin> -->
+       <view class="orderList" wx:for="{{orderList}}"  wx:key="{{item.invCtime}}"  data-code="{{item.invCode}}" bindtap='goOrderListDetail' hidden='{{currentTabsIndex !=0 }}' >
+          <view class="dateMsg">
+            <text class="txtRight">下单时间：{{item.invCtime}}</text>
+            <text>出仓类型：{{item.invType}}</text>
+          </view>
+          
+          <view class="orderMsg">
+            <text class="txtLeft">单号：{{item.invCode}}</text>
+            <text class="txtRight {{item.invStatus==5?'green':''}}">{{item.invUname}}，{{item.invStatMsg}}</text>
+          </view>
+      </view>
+
+        <view class="orderList" wx:for="{{orderList}}"  wx:key="{{item.invCtime}}"  data-code="{{item.invCode}}" bindtap='goOrderListDetail' hidden='{{currentTabsIndex !=1 }}'>
+          <view class="dateMsg">
+            <text class="txtRight">下单时间：{{item.invCtime}}</text>
+             <text>出仓类型：{{item.invType}}</text>
+          </view>
+          <view class="orderMsg">
+            <text class="txtLeft">单号：{{item.invCode}}</text>
+            <text class="txtRight">{{item.invUname}}，{{item.invStatMsg}}</text>
+          </view>
+      </view>
+  
+        <view class="orderList" wx:for="{{orderList}}"  wx:key="{{item.invCtime}}"  data-code="{{item.invCode}}" bindtap='goOrderListDetail'  hidden='{{currentTabsIndex !=2 }}'>
+          <view class="dateMsg">
+            <text class="txtRight">下单时间：{{item.invCtime}}</text>
+             <text>出仓类型：{{item.invType}}</text>
+          </view>
+          <view class="orderMsg">
+            <text class="txtLeft">单号：{{item.invCode}}</text>
+            <text class="txtRight">{{item.invUname}}，{{item.invStatMsg}}</text>
+          </view>
+      </view>
+         <i-load-more  tip="{{loadTxt}}" loading="{{loadShow}}"/>      
+    </scroll-view>
+  </view>
+</view>

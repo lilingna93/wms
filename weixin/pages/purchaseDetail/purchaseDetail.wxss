@@ -1,0 +1,117 @@
+/* pages/purchaseDetail/purchaseDetail.wxss */
+
+.detail-info{
+  padding: 4rpx 10rpx;
+  box-sizing: border-box;
+  border-bottom: 1rpx solid #dddee1;
+  position: fixed;
+  top: 0;
+  z-index: 100;
+  background: #fff;
+  width: 100%;
+  box-shadow:2rpx 2rpx 12rpx #dfdfdf;
+}
+
+.detail-info-msg{
+  font-size: 34rpx;
+  color: #1c2438;
+  display: flex;
+  justify-content: space-between;
+}
+.detail-info-time{
+  font-size: 30rpx;
+  color: #495060;
+  padding: 12rpx 4rpx;
+}
+.detail-info-price{
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 32rpx;
+  padding: 8rpx 6rpx;
+  color: #ed3f14;
+}
+.btn{
+  background: #2d8cf0;
+  color: #fff;
+  padding: 10rpx 8rpx;
+  border-radius: 6rpx;
+  font-size: 34rpx;
+}
+.operation-warpper{
+    width: 100%;
+    position: fixed;
+    bottom: 0;
+    display: flex;
+    height: 92rpx;
+    line-height: 92rpx;
+    border-radius: 8rpx;    
+}
+ .operation-edit{
+   background:#2d8cf0; 
+ }
+ .operation-cancel{
+  background:#ff9900; 
+ }
+ .operation-contact{
+  background:#19be6b;
+ }
+.operation-btn{
+    flex: 1;
+    text-align: center;
+    color: #fff;
+}
+.btn-warpper{
+    width: 100%;
+    position: fixed;
+    bottom: 0rpx;
+}
+.contact-btn{
+    width:100%; 
+    background: #19be6b;
+    color: #fff;
+}
+.detail-list{
+  border-bottom:1rpx solid #dddee1;
+  box-sizing: border-box;
+}
+.detail-list_warpper{
+  display:flex;width:100%;
+}
+.detail-list image{
+  height:140rpx;width:140rpx;
+  background: #e9eaec;
+  margin: 34rpx;
+  box-sizing: border-box;
+}
+.detail-txt{
+  display:flex;
+  flex-direction: column;
+  justify-content: space-around;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 20rpx;
+}
+.goods-name{
+  padding:6rpx;
+  color: #1c2438;
+  font-size: 34rpx;
+  box-sizing: border-box;
+}
+.goods-norm{
+  color: #80848f;  
+}
+.goods-price{
+  color: #ed3f14;
+}
+.goods-norm,.goods-price{
+  font-size:30rpx;
+  padding:6rpx;
+  display:flex;
+  justify-content:space-between;
+  box-sizing: border-box;
+}
+.txt-color{
+  color: #80848f;
+}

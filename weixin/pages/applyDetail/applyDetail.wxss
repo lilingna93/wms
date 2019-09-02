@@ -1,0 +1,94 @@
+/* pages/applyDetail/applyDetail.wxss */
+.detail-info{
+  padding: 8rpx 10rpx;
+  box-sizing: border-box;
+  border-bottom: 1rpx solid #dddee1;
+  position: fixed;
+  top: 0;
+  z-index: 100;
+  background: #fff;
+  width: 100%;
+  box-shadow:2rpx 2rpx 12rpx #dfdfdf;
+}
+.detail-info-msg{
+  font-size: 34rpx;
+  color: #1c2438;
+  display: flex;
+  justify-content: space-between;
+}
+.detail-info-time{
+  font-size: 30rpx;
+  color: #495060;
+  padding: 16rpx 4rpx;
+}
+.btn{
+  background: #5cadff;
+  color: #fff;
+  padding: 12rpx 8rpx;
+  border-radius: 6rpx;
+}
+.operation-warpper{
+    width: 100%;
+    position: fixed;
+    bottom: 0;
+    display: flex;
+    height: 92rpx;
+    line-height: 92rpx;
+    border-radius: 8rpx;    
+}
+ .operation-cancel{
+  background:#ff9900; 
+ }
+ .operation-contact{
+  background:#19be6b;
+ }
+.operation-btn{
+    flex: 1;
+    text-align: center;
+    color: #fff;
+}
+.btn-warpper{
+    width: 100%;
+    position: fixed;
+    bottom: 0rpx;
+}
+.contact-btn{
+    width:100%; 
+    background: #19be6b;
+    color: #fff;
+}
+.detail-list{
+  border-bottom:1rpx solid #dddee1;
+  box-sizing: border-box;
+}
+.detail-list_warpper{
+  display:flex;width:100%;
+}
+.detail-list image{
+  height:160rpx;width:160rpx;
+  margin: 40rpx;
+  box-sizing: border-box;
+  background: #e9eaec;
+}
+.detail-txt{
+  display:flex;
+  flex-direction: column;
+  justify-content: space-around;
+  padding-left: 34rpx; 
+  box-sizing: border-box;
+  width: 66%;
+}
+.goods-name{
+  padding:6rpx;
+  color: #1c2438;
+  font-size: 34rpx;
+  box-sizing: border-box
+}
+.goods-norm{
+  font-size:30rpx;
+  padding:6rpx;
+  display:flex;
+  justify-content:space-between;
+  color: #80848f;  
+  box-sizing: border-box;
+}

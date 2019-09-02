@@ -1,0 +1,26 @@
+<view class='wrapper'>
+  <view class='edit'>
+    <view class='line'>
+      <view class='icon'>✆</view>
+      <view class='text'>
+        <input placeholder="请输入手机号" type="text" style='height:40px' bindinput='onPhoneEditEvent' value='{{phone}}'/>
+      </view>
+    </view>
+    <view class='line last'>
+      <view bindtap='onSendValidCodeEvent' class='valid'>发送验证码</view>
+      <view class='icon'>✉</view>
+      <view class='text'>
+        <input placeholder="请输入验证码" type="number" style='height:40px;width:120px;' value='{{vcode}}' />
+      </view>
+    </view>
+  </view>
+
+  <view bindtap='onLoginAndActiveEvent' class='login'>
+    登录
+  </view>
+
+  <view class='desc'>
+    说明:1.首次登录时，请按流程填写在公司注册的手机号完成账户的激活。 2.如中途失去登录状态，可重新到达本页进行登录。
+  </view>
+</view>
+<i-message id="message" />

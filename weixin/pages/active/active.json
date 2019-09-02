@@ -1,0 +1,11 @@
+{
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#fff",
+    "navigationBarTitleText": "账户激活",
+    "navigationBarTextStyle": "black"
+  },
+  "usingComponents": {
+    "i-message": "../../iview/message/index"
+  }
+}

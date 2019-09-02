@@ -1,0 +1,80 @@
+<!--pages/purchaseCart/purchaseCart.wxml-->
+<view class="container">
+  <view wx:if="{{cartList.length==0}}" style="text-align:center;margin-top:50px;">
+    <view>采购车是空的耶，去逛逛吧~~</view>
+    <button size="mini" bindtap='linkToPurchase' class="goshopping">去逛逛</button>
+  </view>
+  <view wx:else>
+    <view class="topbar">
+      <view class="time" style='display:flex;align-items:center'>
+        <picker mode="date" value="{{date}}" bindchange="bindPickerChange" start="{{planSDate}}" end="{{planEDate}}">
+          <view class="picker">
+            送货日期: {{planSDate}}
+          </view>
+        </picker>
+        <button size='mini' bindtap="deleteCart">删除</button>
+      </view>
+      <view class='room' wx:if="{{rooms.length>0}}">
+        <picker bindchange="bindRoomsChange" value="{{roomsIdx}}" range="{{rooms}}">
+          <view class="picker">
+            采购餐厅：{{rooms[roomsIdx]}}
+          </view>
+        </picker>
+      </view>
+    </view>
+    <scroll-view class="cart_container" scroll-y>
+      <view wx:for="{{cartList}}" wx:key="index" wx:for-item="cartItem">
+        <view class="check_cart">
+          <view class="check">
+            <view wx:if="{{cartItem.checked}}" class='check_subBox'>
+              <image src="../../images/icon/checked.png" bindtap='singleCheck' data-index="{{index}}" data-code="{{cartItem.skCode}}" data-checked="cartItem.checked}}"></image>
+            </view>
+            <view wx:else class='check_subBox'>
+              <image src="../../images/icon/check.png" bindtap='singleCheck' data-index="{{index}}" data-code="{{cartItem.skCode}}" data-checked="{{cartItem.checked}}"></image>
+            </view>
+          </view>
+          <view class="cart_item">
+            <view class="item-image">
+              <image class="item-image" src="{{baseImgPath}}/{{cartItem.skImg}}.jpg"></image>
+            </view>
+            <view class="column cart_column">
+              <text class="title">{{cartItem.spName}}</text>
+              <text class="brand">{{cartItem.skBrand}}  {{cartItem.skNorm}}</text>
+              <view class="row cart_row">
+                <text class="sku-price">￥{{cartItem.skTotalPrice}}/{{cartItem.skUnit}}</text>
+                <view class="cart_num">
+                  <view class="cart_sub" data-code="{{cartItem.skCode}}" bindtap='onSkuCountSubEvent' data-skcunit="{{cartItem.skCunit}}" data-index="{{index}}">-</view>
+                  <input type="number" class="cart_count" value="{{cartCountDict[cartItem.skCode]}}" data-code="{{cartItem.skCode}}" bindblur='onSkuCountEditEvent' data-skcunit="{{cartItem.skCunit}}" data-index="{{index}}" />
+                  <view class="cart_add" data-code="{{cartItem.skCode}}" bindtap='onSkuCountAddEvent' data-skcunit="{{cartItem.skCunit}}" data-index="{{index}}">+</view>
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+    <view class="total_bar">
+      <view class="check_all">
+        <view wx:if="{{totalChecked==true}}">
+          <image src="../../images/icon/checked.png" bindtap='totalCheck' data-checked="{{totalChecked}}"></image>
+        </view>
+        <view wx:else>
+          <image src="../../images/icon/check.png" bindtap='totalCheck' data-checked="{{totalChecked}}"></image>
+        </view>
+        <text class="">全选</text>
+      </view>
+      <view class="total_price">
+        合计：
+        <text class="sku-price">￥</text>
+        <text class="sku-price">{{totalPrice}}</text>
+      </view>
+      <view wx:if="{{singleChecked==true}}">
+        <button size="mini" bindtap='confirmOrder' class="active">确认下单</button>
+      </view>
+      <view wx:else>
+        <button size="mini">确认下单</button>
+      </view>
+    </view>
+
+  </view>
+</view>

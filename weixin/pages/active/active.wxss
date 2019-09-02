@@ -1,0 +1,58 @@
+.wrapper {
+  margin: 15% auto 0;
+  width: 300px;
+}
+
+.wrapper .edit {
+  height: 80px;
+  line-height: 40px;
+  font-size: 14px;
+}
+
+.wrapper .edit .line {
+  border: 1px solid #efefef;
+}
+
+.wrapper .edit .last {
+  margin-top: -1px;
+}
+
+.wrapper .edit .valid {
+  display: block;
+  float: right;
+  width: 80px;
+  background-color: #0986f0;
+  text-align: center;
+  color: #fff;
+  height: 36px;
+  line-height: 36px;
+  margin: 2px;
+}
+
+.wrapper .edit .icon {
+  width: 30px;
+  float: left;
+  text-align: center;
+  font-size: 18px;
+}
+
+.wrapper .edit .text {
+  margin-left: 30px;
+  height: 40px;
+}
+.wrapper  .login {
+  margin-top: 40px;
+  background-color: #0986f0;
+  text-align: center;
+  color: #fff;
+  height: 40px;
+  line-height: 40px;
+  font-size: 14px;
+}
+
+.wrapper .desc {
+  margin: 10px auto;
+  width: 300px;
+  font-size: 12px;
+  color: #666;
+}

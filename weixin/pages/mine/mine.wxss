@@ -1,0 +1,11 @@
+.wrapper{position:fixed;top:0;bottom:0;right:0;left:0;background-color:#FEFEFE}
+.wrapper .head{border-bottom:1px solid #ccc;padding:10px 10px;background-color:#FAFAFA;box-shadow:0px 1px 2px #EFEFEF;}
+.wrapper .card{padding:10px;border:1px solid #ccc;height:140px;border-radius:6px;background-color:#FEFEFE;box-shadow:0px 10px 60px #DEDFDE;position:relative}
+.card .name{width:100px;float:left;font-size:20px;font-weight:bold}
+.card .code{margin-left:120px;text-align:right;font-size:16px;}
+.card .content{padding-top:15px;text-align:left;font-size:14px;line-height:24px}
+.card .phone{float:right;}
+.menu{margin:10px;font-size:16px}
+.menu .item{height:50px;line-height:50px;border-bottom:1px solid #DFDFDF}
+.menu .info{float:right;color:#999999}
+.skuver{width:100%;text-align:center;color:#999999;font-size:10px;line-height:60px}

@@ -1,0 +1,16 @@
+.wrapper{padding:10px}
+.wrapper .info{padding:5px;border: 1px solid #efefef;}
+.wrapper .info .item{height:20xp;line-height: 20px;}
+.wrapper .info .title{font-weight: weight}
+.wrapper .info .value{font-size:12px;color: #333}
+.wrapper .obar{padding:5px;background-color: #fafafa;height:30px;line-height:30px;margin: 5px 0 2px 0;border:1px solid #efefef}
+.wrapper .obar .open{float: right;color: #666666;font-size:12px}
+.wrapper .obar .code{float: right;color: #666666;font-size:12px}
+
+.wrapper .oper{padding:5px;border:1px solid #efefef;font-size: 12px;}
+.wrapper .title{font-size: 14px;}
+.wrapper .guide{float: right;color: #999}
+.wrapper .oper .item{margin-top: 12px}
+.wrapper .oper .count{border: 1px solid #999;line-height:32px;height: 32px;font-size: 12px;color:red;padding-left:5px;}
+.wrapper .oper .count .inp{font-size: 18px;padding:4px;color:red;font-weight: bold}
+.wrapper .submit{margin: 40px auto 20px;background-color: #2d8cf0;color: #fff;text-align: center;font-size: 18px;height: 40px;line-height:40px;}

@@ -1,0 +1,44 @@
+<view class='wrapper'>
+<view class='obar'>
+    货品详情<text class='code'>{{goodsCode}}</text>
+  </view>
+  <view class='info'>
+    <view class='item' >
+      <text class="title">名称：</text>
+      <text class='value'>{{goods["name"]}}</text>
+    </view>
+    <view class='item' >
+      <text class="title">品牌：</text>
+      <text class='value'>{{goods["brand"]}}</text>
+    </view>
+    <view class='item' >
+      <text class="title">规格：</text>
+      <text class='value'>{{goods["norm"]}}</text>
+    </view>
+    <view class='item' >
+      <text class="title">数量：</text>
+      <text class='value'>{{goods["count"]}} {{goods["unit"]}}</text>
+    </view>
+    <!-- <view class='item' >
+      <text class="title">批次剩余：</text>
+      <text class='value'></text>
+    </view> -->
+  </view>
+  <view class='obar'>
+    更多操作
+    <view class="open">
+    取消申领
+    <switch  checked bindchange="onClickEventForReturn" checked = "{{isReturnOper}}"/>
+    </view>
+  </view>
+  <view class='oper' wx:if="{{isReturnOper}}">
+    <view class='content'>取消申领，并向仓库放回 (规格：{{goods["norm"]}}) {{goods["name"]}}   <text class='count'>{{goods["count"]}} {{goods["unit"]}}</text> </view>
+    <view class='desc'>
+      <view>说明：</view>
+      <view>1.该功能在申领货品错误或者数量多出实际情况时使用。</view>
+      <view>2.具体方法是先全部取消已经申领货品，然后根据实际情况重新下申领单。</view>
+      <view>3.取消申领后，货品数据会立即恢复到库存中。</view>
+    </view>
+    <view class='submit' bindtap='onClickEventForSubmit'>确认取消申领</view>
+  </view>
+</view>

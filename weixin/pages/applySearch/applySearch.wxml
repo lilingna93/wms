@@ -1,0 +1,40 @@
+<!--pages/applySearch/applySearch.wxml-->
+<view class="container">
+  <view class="main">
+      <scroll-view class="cart" scroll-y wx:if="{{goodsList.length!=0}}">
+        <view wx:for="{{goodsList}}" wx:key="index" wx:for-item="goodsItem">
+          <view class="cart_item">
+            <view class="item-image">
+              <image  src="{{baseImgPath}}/{{goodsItem.spImg}}.jpg"></image>
+              <text wx:if="{{cartCountDict[goodsItem.spCode] > 0}}" class='image-number'>{{cartCountDict[goodsItem.spCode]}}</text>
+            </view>
+            <view class="column">
+              <text class="title">{{goodsItem.spName}}</text>
+              <text class="brand">{{goodsItem.spBrand}}  {{goodsItem.spNorm}}</text>
+              <view class="row">
+                <text class="sku-price">库存:{{goodsItem.spCount}}{{goodsItem.spUnit}}</text>
+                <!-- 含有数量开始 -->
+
+                <view class="cart_num"  wx:if="{{null != cartCountDict[goodsItem.spCode]}}">
+                  <view class="cart_sub" data-code="{{goodsItem.spCode}}" bindtap='onSkuCountSubEvent' data-skcunit="{{goodsItem.spCunit}}"  data-index="{{index}}">-</view>
+                  <input class="cart_count" type="digit" bindblur='onSkuCountEditEvent' data-code="{{goodsItem.spCode}}" value="{{cartCountDict[goodsItem.spCode]}}" data-stock="{{goodsItem.spCount}}"  data-skcunit="{{goodsItem.spCunit}}"  data-index="{{index}}"/>
+                  <view class="cart_add" data-code="{{goodsItem.spCode}}" bindtap='onSkuCountAddEvent' data-stock="{{goodsItem.spCount}}"  data-skcunit="{{goodsItem.spCunit}}"  data-index="{{index}}">+</view>
+                </view>
+                <!-- 有数量结束 -->
+                <!-- 无数量开始 -->
+                <view wx:else class="cart_img">
+                    <image src="../../images/icon/cart.png" style='width:24px;height:24px;' data-code="{{goodsItem.spCode}}" bindtap='onSkuCountAddEvent'></image>
+                </view>
+                <!-- 无数量结束 -->
+              </view>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+      <view wx:else>
+        没有符合搜索条件的商品~
+      </view>
+  </view>
+</view>
+
+

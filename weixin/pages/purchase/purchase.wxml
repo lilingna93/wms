@@ -1,0 +1,80 @@
+<!--pages/purchase/purchase.wxml-->
+<view class="container">
+  <view class="searchbar">
+    <icon class="searchicon" size='20' type='search'></icon>
+    <input class="search" placeholder="search" value="{{keyWord}}" bindinput='inputWords' />
+    <button class="searchbtn" size="mini" bindtap='searchGoods'>搜索</button>
+  </view>
+  <view class="main">
+    <view class="left">
+      <scroll-view class="type" scroll-y>
+        <view wx:for="{{skuData}}" wx:key="index" wx:for-item="typeItem" wx:for-index="idx">
+          <view wx:if="{{idx == typeIndex}}">
+            <view class="type_item active" data-index="{{idx}}" data-code="{{typeItem.tCode}}">{{typeItem.tName}}</view>
+          </view>
+          <view wx:else>
+            <view class="type_item" data-index="{{idx}}" data-code="{{typeItem.tCode}}" bindtap='triggerCgData'>{{typeItem.tName}}</view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+    <view class="right">
+      <scroll-view class="category" scroll-x>
+        <view wx:for="{{cgData}}" wx:key="index" wx:for-item="cgItem" wx:for-index="idx" class="cg_item">
+          <view wx:if="{{idx == cgIndex}}">
+            <view class="cg_item active" data-index="{{idx}}" data-code="{{cgItem.cCode}}">{{cgItem.cName}}</view>
+          </view>
+          <view wx:else>
+            <view class="cg_item" data-index="{{idx}}" data-code="{{cgItem.cCode}}" bindtap='triggerGoodsData'>{{cgItem.cName}}</view>
+          </view>
+        </view>
+      </scroll-view>
+      <scroll-view class="cart" scroll-y bindscrolltolower="toLower">
+        <view wx:for="{{goodsCodes}}" wx:key="index" wx:for-item="goodsCode">
+          <view class="cart_item">
+            <view class="item-image">
+              <image src="{{baseImgPath}}/{{skuDict[goodsCode].skImg}}.jpg"></image>
+              <text wx:if="{{cartCountDict[goodsCode] > 0}}" class='image-number'>{{cartCountDict[goodsCode]}}</text>
+            </view>
+            <view class="column">
+              <text class="title">{{skuDict[goodsCode].spName}}</text>
+              <text class="brand">{{skuDict[goodsCode].skBrand}}  {{skuDict[goodsCode].skNorm}}</text>
+              <view class="row">
+
+                <view wx:if="{{skuDict[goodsCode].skTotalPrice==0}}">
+                  <text class="market-price">(市价)/{{skuDict[goodsCode].skUnit}}</text>
+                </view>
+                <view wx:else>
+                  <text class="sku-price">￥{{skuDict[goodsCode].skTotalPrice}}/{{skuDict[goodsCode].skUnit}}</text>
+                </view>
+
+
+                <!-- 含有数量开始 -->
+                <view class="cart_num" wx:if="{{null != cartCountDict[goodsCode]}}">
+                  <view class="cart_sub" data-code="{{goodsCode}}" bindtap='onSkuCountSubEvent' data-skcunit="{{skuDict[goodsCode].skCunit}}">-</view>
+                  <input class="cart_count" type="number" bindblur='onSkuCountEditEvent' data-code="{{goodsCode}}" data-skcunit="{{skuDict[goodsCode].skCunit}}" value="{{cartCountDict[goodsCode]}}" />
+                  <view class="cart_add" data-code="{{goodsCode}}" bindtap='onSkuCountAddEvent' data-skcunit="{{skuDict[goodsCode].skCunit}}">+</view>
+                </view>
+                <!-- 有数量结束 -->
+                <!-- 无数量开始 -->
+                <view wx:else class="cart_img">
+                  <image src="../../images/icon/cart.png" style='width:24px;height:24px;' data-code="{{goodsCode}}" data-skcunit="{{skuDict[goodsCode].skCunit}}" bindtap='onSkuCountAddEvent'></image>
+                </view>
+                <!-- 无数量结束 -->
+              </view>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+  <view class="footer" wx-if="{{totalCount!=0}}">
+    <view class="cart_opa">
+      <image src="../../images/icon/cart_opa.png" style='width:25px;height:25px;'></image>
+      <view class="number">
+        <view class="num">{{totalCount}}</view>
+      </view>
+    </view>
+    <text class="go_order" bindtap='linkToCar'>选好了＞</text>
+  </view>
+</view>

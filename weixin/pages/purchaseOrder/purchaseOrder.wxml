@@ -1,0 +1,169 @@
+<!--pages/order/order.wxml-->
+<view>
+  <view class='tabs-box'>
+    <block wx:for="{{['全部','已创建','已完成','已取消']}}" wx:key="id">
+      <view class="tabs-item {{currentTabsIndex==index?'selected':''}}" bindtap='onTabsItemTap' data-index='{{index}}'>
+        {{item}}
+      </view>
+    </block>
+  </view>
+  <view>
+    <scroll-view class='scroll-warpper' style="height:{{scrollHeight}}px;" scroll-y='true' bindscrolltolower="loadMore" scroll-top="{{scrollTop}}">
+      <!-- <i-spin  size="small"></i-spin> -->
+      <view class="orderList" wx:for="{{orderList}}" wx:key="{{index}}" hidden='{{currentTabsIndex !=0 }}'>
+        <view style='display:flex' class='listItem color_{{item.g}}'>
+          <view data-code="{{item.oCode}}" bindtap="goOrderDetail"  class='orderDetail'>
+            <view class="dateMsg">
+              <text class="txtLeft">送货日期：<text class='dateinfo'>{{item.oPdate}}</text></text>
+              <text class="txtRight">下单时间：{{item.oCtime}}</text>
+            </view>
+            <view class="orderMsg">
+              <text class="txtLeft">单号：{{item.oCode}}</text>
+              <text class="txtRight {{item.oStatus==2?'green':''}}">{{item.oStatusCommn}}</text>
+              <view class='oTag'>{{item.oTag}}</view>
+            </view>
+          </view>
+          <view class='icon {{item.show&&item.orderDetail.length>0?"open":""}}' catchtap='getDetail' data-index='{{index}}' data-code="{{item.oCode}}">
+            <view class="to_bottom"></view>
+          </view>
+        </view>
+        <view wx:if="{{item.show&&item.orderDetail.length>0}}" class='goodsDetail'>
+          <view wx:for="{{item.orderDetail}}" wx:key="{{index}}" class='detailContainer'>
+            <image src="{{baseImgPath}}{{item.skImg}}" class='goodsImg'></image>
+            <view class='goodsInfo'>
+              <view class='goodsMsg'>
+                <text>{{item.spName}}</text>
+                <text><text>单价：</text>¥{{item.skPrice}}/{{item.skUnit}}</text>
+              </view>
+              <view class='goodsMessage'>
+                <text>{{item.skNorm}}</text>
+                <text>采购数量：{{item.skNum}}{{item.skUnit}}</text>
+              </view>
+              <view class='goodsMessage'>
+                <text>实收数量：<text style='color:#F56C6C'>{{item.skCount}}{{item.skUnit}}</text></text>
+                <text>总价：<text style='color:#F56C6C'>¥{{item.totalPrice}}</text></text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="orderList" wx:for="{{orderList}}" wx:key="{{index}}" hidden='{{currentTabsIndex !=1 }}'>
+        <view style='display:flex' class='listItem color_{{item.g}}'>
+          <view  data-code="{{item.oCode}}" bindtap="goOrderDetail" class='orderDetail'>
+            <view class="dateMsg">
+              <text class="txtLeft">送货日期：{{item.oPdate}}</text>
+              <text class="txtRight">下单时间：{{item.oCtime}}</text>
+            </view>
+            <view class="orderMsg">
+              <text class="txtLeft">单号：{{item.oCode}}</text>
+              <text class="txtRight">{{item.oStatusCommn}}</text>
+              <view class='oTag'>{{item.oTag}}</view>
+            </view>
+          </view>
+          <view class='icon {{item.show&&item.orderDetail.length>0?"open":""}}' catchtap='getDetail' data-index='{{index}}' data-code="{{item.oCode}}">
+            <view class="to_bottom"></view>
+          </view>
+        </view>
+        <view wx:if="{{item.show&&item.orderDetail.length>0}}" class='goodsDetail'>
+          <view wx:for="{{item.orderDetail}}" wx:key="{{index}}" class='detailContainer'>
+            <image src="{{baseImgPath}}{{item.skImg}}" class='goodsImg'></image>
+            <view class='goodsInfo'>
+              <view class='goodsMsg'>
+                <text>{{item.spName}}</text>
+                <text><text>单价：</text>¥{{item.skPrice}}/{{item.skUnit}}</text>
+              </view>
+              <view class='goodsMessage'>
+                <text>{{item.skNorm}}</text>
+                <text>采购数量：{{item.skNum}}{{item.skUnit}}</text>
+              </view>
+              <view class='goodsMessage'>
+                <text>实收数量：<text style='color:#F56C6C'>{{item.skCount}}{{item.skUnit}}</text></text>
+                <text>总价：<text style='color:#F56C6C'>¥{{item.totalPrice}}</text></text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+
+      <view class="orderList" wx:for="{{orderList}}" wx:key="{{index}}" hidden='{{currentTabsIndex !=2 }}'>
+        <view style='display:flex' class='listItem color_{{item.g}}'>
+          <view data-code="{{item.oCode}}" bindtap="goOrderDetail"  class='orderDetail'>
+            <view class="dateMsg">
+              <text class="txtLeft">送货日期：{{item.oPdate}}</text>
+              <text class="txtRight">下单时间：{{item.oCtime}}</text>
+            </view>
+            <view class="orderMsg">
+              <text class="txtLeft">单号：{{item.oCode}}</text>
+              <text class="txtRight">{{item.oStatusCommn}}</text>
+              <view class='oTag'>{{item.oTag}}</view>
+            </view>
+          </view>
+          <view class='icon {{item.show&&item.orderDetail.length>0?"open":""}}' catchtap='getDetail' data-index='{{index}}' data-code="{{item.oCode}}">
+            <view class="to_bottom"></view>
+          </view>
+        </view>
+        <view wx:if="{{item.show&&item.orderDetail.length>0}}" class='goodsDetail'>
+          <view wx:for="{{item.orderDetail}}" wx:key="{{index}}" class='detailContainer'>
+            <image src="{{baseImgPath}}{{item.skImg}}" class='goodsImg'></image>
+            <view class='goodsInfo'>
+              <view class='goodsMsg'>
+                <text>{{item.spName}}</text>
+                <text><text>单价：</text>¥{{item.skPrice}}/{{item.skUnit}}</text>
+              </view>
+              <view class='goodsMessage'>
+                <text>{{item.skNorm}}</text>
+                <text>采购数量：{{item.skNum}}{{item.skUnit}}</text>
+              </view>
+              <view class='goodsMessage'>
+                <text>实收数量：<text style='color:#F56C6C'>{{item.skCount}}{{item.skUnit}}</text></text>
+                <text>总价：<text style='color:#F56C6C'>¥{{item.totalPrice}}</text></text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="orderList" wx:for="{{orderList}}" wx:key="{{index}}" hidden='{{currentTabsIndex !=3 }}'>
+
+        <view style='display:flex' class='listItem color_{{item.g}}'>
+          <view  data-code="{{item.oCode}}" bindtap="goOrderDetail"  class='orderDetail'>
+            <view class="dateMsg">
+              <text class="txtLeft">送货日期：{{item.oPdate}}</text>
+              <text class="txtRight">下单时间：{{item.oCtime}}</text>
+            </view>
+            <view class="orderMsg">
+              <text class="txtLeft">单号：{{item.oCode}}</text>
+              <text class="txtRight">{{item.oStatusCommn}}</text>
+              <view class='oTag'>{{item.oTag}}</view>
+            </view>
+          </view>
+          <view class='icon {{item.show&&item.orderDetail.length>0?"open":""}}' catchtap='getDetail' data-index='{{index}}' data-code="{{item.oCode}}">
+            <view class="to_bottom"></view>
+          </view>
+        </view>
+        <view wx:if="{{item.show&&item.orderDetail.length>0}}" class='goodsDetail'>
+          <view wx:for="{{item.orderDetail}}" wx:key="{{index}}" class='detailContainer'>
+            <image src="{{baseImgPath}}{{item.skImg}}" class='goodsImg'></image>
+            <view class='goodsInfo'>
+              <view class='goodsMsg'>
+                <text>{{item.spName}}</text>
+                <text><text>单价：</text>¥{{item.skPrice}}/{{item.skUnit}}</text>
+              </view>
+              <view class='goodsMessage'>
+                <text>{{item.skNorm}}</text>
+                <text>采购数量：{{item.skNum}}{{item.skUnit}}</text>
+              </view>
+              <view class='goodsMessage'>
+                <text>实收数量：<text style='color:#F56C6C'>{{item.skCount}}{{item.skUnit}}</text></text>
+                <text>总价：<text style='color:#F56C6C'>¥{{item.totalPrice}}</text></text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+      <i-load-more tip="{{loadTxt}}" loading="{{loadShow}}" />
+    </scroll-view>
+  </view>
+</view>

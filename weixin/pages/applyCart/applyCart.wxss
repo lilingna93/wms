@@ -1,0 +1,86 @@
+/* pages/applyCart/applyCart.wxss */
+.check_cart{
+  display: flex;
+  border-bottom: 1px solid #dedede;
+}
+
+.check image{
+  width:60rpx;
+  height:60rpx;
+}
+.total_bar{
+  display: flex;
+  position: fixed;
+  width: 100%;
+  bottom: 0;
+  height: 50px;
+  line-height: 50px;
+}
+.total_bar image{
+  width: 70rpx;
+  height: 70rpx;
+  margin-left: 20rpx;
+  vertical-align:middle;
+}
+.check_subBox{
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: centent;
+  margin: 0 20rpx;
+}
+.total_price{
+  flex: 1;
+}
+.check_all{
+  display: flex;
+  flex: 1;
+}
+.total_bar button{
+  margin:20rpx 20rpx 0 15rpx;
+}
+.active,.goshopping{background-color: #f0145a; color: #fff;}
+.goshopping{margin-top: 15px;}
+.topbar{
+  overflow: hidden;
+  border-bottom: 1px solid #dedede; 
+  position: fixed;
+  top: 0px;
+  width:100%;
+  height: 40px;
+  box-shadow:1px 1px 6px #dfdfdf;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10rpx;
+}
+.topbar button{
+  height:30px;
+  margin-right: 10px;
+}
+.cart_container{
+  height: 80%;
+  position: fixed;
+  top: 50px;
+  bottom: 50px;
+}
+.room{
+  display: block;
+  font-size: 14px;
+}
+.cart_column{
+  width: calc(100% - 210rpx)
+}
+.cart_row{
+  width: 100%;
+  padding-right:0!important; 
+}
+.cart_item{
+  border:none;
+  width: calc(100% - 80rpx)
+}
+.notice{
+  font-size:11px;
+  color:#8f8f94;
+  margin:5px 0;
+}

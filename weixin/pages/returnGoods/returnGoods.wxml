@@ -1,0 +1,73 @@
+<!--pages/returnGoods/returnGoods.wxml-->
+<view>
+  <view class='tabs-box'>
+    <block  wx:for="{{['申请中','退货完成','已拒绝']}}" wx:key="id">
+      <view class="tabs-item {{currentTabsIndex==index?'selected':''}}" bindtap='onTabsItemTap' data-index='{{index}}'>
+        {{item}}
+      </view>
+    </block>
+  </view>
+    <view>
+    <scroll-view class='scroll-warpper'  style="height:{{scrollHeight}}px;" scroll-y = 'true' bindscrolltolower="loadMore" scroll-top="{{scrollTop}}">
+       <view class='detail-list'  wx:for="{{orderList}}"  wx:key="{{item.skCode}}"  hidden='{{currentTabsIndex !=0 }}'>
+      <view class='detail-list_warpper'>
+        <image  src="{{baseImgPath}}{{item.spImg}}"></image>
+        <view class='detail-txt'>
+          <text class='goods-name'>{{item.spName}}</text>
+          <view class='goods-norm'>
+            <text>{{item.skNorm}}</text>
+            <text></text>
+          </view>
+          <view class='goods-price'>
+            <text><text class='txt-color'>数量:{{item.gCount}}{{item.skUnit}}</text></text>
+            <text><text class='txt-color'>¥</text>{{item.spSprice}}</text>
+ 
+          </view>
+        </view>
+      </view>
+      <view style="font-size:14px;margin-left:24px;padding-bottom:6px;color:#80848f">所属采购单：{{item.oCode}}</view>
+      </view>
+
+      <view class='detail-list'  wx:for="{{orderList}}"  wx:key="{{item.skCode}}"  hidden='{{currentTabsIndex !=1 }}'>
+       <view class='detail-list_warpper'>
+        <image  src="{{baseImgPath}}{{item.spImg}}"></image>
+         <view class='detail-txt'>
+          <text class='goods-name'>{{item.spName}}</text>
+          <view class='goods-norm'>
+            <text>{{item.skNorm}}</text>
+            <text></text>
+   
+          </view>
+          <view class='goods-price'>
+            <text><text class='txt-color'>数量:{{item.gCount}}{{item.skUnit}}</text></text>
+            <text><text class='txt-color'>¥</text>{{item.spSprice}}</text>
+     
+          </view>
+        </view>
+       </view>
+         <view style="font-size:14px;margin-left:24px;padding-bottom:6px;color:#80848f">所属采购单：{{item.oCode}}</view>
+      </view>
+
+      <view class='detail-list'  wx:for="{{orderList}}"  wx:key="{{item.skCode}}"  hidden='{{currentTabsIndex !=2 }}'>
+      <view class='detail-list_warpper'>
+        <image  src="{{baseImgPath}}{{item.spImg}}"></image>
+         <view class='detail-txt'>
+          <text class='goods-name'>{{item.spName}}</text>
+          <view class='goods-norm'>
+            <text>{{item.skNorm}}</text>
+            <text></text>
+      
+          </view>
+          <view class='goods-price'>
+            <text><text class='txt-color'>数量:{{item.gCount}}{{item.skUnit}}</text></text>
+            <text><text class='txt-color'>¥</text>{{item.spSprice}}</text>
+       
+          </view>
+        </view>
+     </view>
+       <view style="font-size:14px;margin-left:24px;padding-bottom:6px;color:#80848f">所属采购单：{{item.oCode}}</view>
+    </view>
+             <i-load-more  tip="{{loadTxt}}" loading="{{loadShow}}"/> 
+    </scroll-view>
+  </view>
+</view>

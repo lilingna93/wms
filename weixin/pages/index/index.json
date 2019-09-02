@@ -1,0 +1,13 @@
+{
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#fff",
+    "navigationBarTitleText": "至味团餐供应链系统",
+    "navigationBarTextStyle": "black"
+  },
+  "usingComponents": {
+    "i-spin": "../../iview/spin/index",
+    "i-message": "../../iview/message/index",
+    "i-progress": "../../iview/progress/index"
+  }
+}

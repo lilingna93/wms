@@ -1,0 +1,17 @@
+.item-image{
+  position:relative;
+}
+.image-number{
+  position: absolute;
+  border-radius: 50%;
+  background: #2d8cf0;
+  right:0;
+  top:2px;
+  font-size: 12px;
+  line-height: 20px;
+  color: #FFFFFF;
+  min-width: 20px;
+  padding: 2px;
+  box-shadow: -1px 1px 2px #999999
+}
+.market-price{padding:0 3px;color:red;background-color: yellow;font-size: 14px}

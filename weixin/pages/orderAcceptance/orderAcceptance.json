@@ -1,0 +1,7 @@
+{
+  "usingComponents": {
+    "i-modal": "../../iview/modal/index",
+    "i-message": "../../iview/message/index"
+  },
+  "navigationBarTitleText": "订单验收"
+}

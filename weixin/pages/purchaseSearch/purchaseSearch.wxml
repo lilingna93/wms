@@ -1,0 +1,50 @@
+<!--pages/purchaseSearch/purchaseSearch.wxml-->
+<view class="container">
+  <view class="main">
+      <scroll-view class="cart" scroll-y wx:if="{{goodsCodes.length!=0}}">
+        <view wx:for="{{goodsCodes}}" wx:key="index" wx:for-item="goodsCode">
+          <view class="cart_item">
+            <view class="item-image">
+              <image  src="{{baseImgPath}}/{{skuDict[goodsCode].skImg}}.jpg"></image>
+              <text wx:if="{{cartCountDict[goodsCode] > 0}}" class='image-number'>{{cartCountDict[goodsCode]}}</text>
+            </view>
+            <view class="column">
+              <text class="title">{{skuDict[goodsCode].spName}}</text>
+              <text class="brand">{{skuDict[goodsCode].skBrand}}  {{skuDict[goodsCode].skNorm}}</text>
+              <view class="row">
+
+              <view wx:if="{{skuDict[goodsCode].skTotalPrice==0}}">
+                  <text class="market-price">(市价)/{{skuDict[goodsCode].skUnit}}</text>
+                </view>
+                <view wx:else>
+                  <text class="sku-price">￥{{skuDict[goodsCode].skTotalPrice}}/{{skuDict[goodsCode].skUnit}}
+                  </text>
+              </view>
+
+
+                <!-- <text class="sku-price">￥{{skuDict[goodsCode].skTotalPrice}}/{{skuDict[goodsCode].skUnit}}</text> -->
+                <!-- 含有数量开始 -->
+                
+                <view class="cart_num"  wx:if="{{null != cartCountDict[goodsCode]}}">
+                  <view class="cart_sub" data-code="{{goodsCode}}" bindtap='onSkuCountSubEvent'  data-skcunit="{{skuDict[goodsCode].skCunit}}"  data-index="{{index}}">-</view>
+                  <input class="cart_count" type="number" bindblur='onSkuCountEditEvent' data-code="{{goodsCode}}" value="{{cartCountDict[goodsCode]}}" data-skcunit="{{skuDict[goodsCode].skCunit}}"  data-index="{{index}}"/>
+                  <view class="cart_add" data-code="{{goodsCode}}" bindtap='onSkuCountAddEvent'  data-skcunit="{{skuDict[goodsCode].skCunit}}"  data-index="{{index}}">+</view>
+                </view>
+                <!-- 有数量结束 -->
+                <!-- 无数量开始 -->
+                <view wx:else class="cart_img">
+                    <image src="../../images/icon/cart.png" style='width:24px;height:24px;' data-code="{{goodsCode}}" bindtap='onSkuCountAddEvent'></image>
+                </view>
+                <!-- 无数量结束 -->
+              </view>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+      <view wx:else>
+        没有符合搜索条件的商品~
+      </view>
+  </view>
+</view>
+
+

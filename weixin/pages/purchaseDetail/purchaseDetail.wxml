@@ -1,0 +1,63 @@
+<!--pages/purchaseDetail/purchaseDetail.wxml-->
+<view>
+  <view class='detail-info'>
+    <view class='detail-info-msg'>
+      <text>单号：{{orderDetail.oCode}}</text>
+      <text>{{orderDetail.oStatusCommn}}</text>
+    </view>
+    <text class='detail-info-time'>时间：{{orderDetail.oTime}}</text>
+    <view class='detail-info-price'>
+      <text> <text  wx:if="{{ orderDetail.oStatus!=4}}">总金额：¥{{orderDetail.oSprice}}</text></text>
+      <view style='height:30px;line-height:30px;text-align:center'><button size='mini' bindtap='copyText' data-text="{{orderDetail.oCode}}">复制下载地址</button></view>
+      <view class='btn' bindtap='goodsOperation' wx:if="{{ orderDetail.oStatus==1 ||  orderDetail.oStatus==4}}">验货操作</view>
+    </view>
+  </view>
+  <scroll-view scroll-y='true' style='padding:190rpx 0 92rpx;'>
+    <view class='detail-list' wx:for="{{orderDetail.list}}" wx:key="{{index}}">
+      <view class="detail-list_warpper">
+        <image src="{{baseImgPath}}{{item.skImg}}"></image>
+        <view class='detail-txt'>
+          <text class='goods-name'>{{item.spName}}</text>
+          <view class='goods-norm'>
+            <text>{{item.skNorm}}</text>
+            <text>采购数量：{{item.skNum}}{{item.skUnit}}</text>
+          </view>
+          <view class='goods-price'>
+            <text><text class='txt-color'>单价:</text>¥{{item.skPrice}}/{{item.skUnit}}</text>
+            <text><text class='txt-color'>总价:</text>¥{{item.totalPrice}}</text>
+          </view>
+        </view>
+      </view>
+      <view style="padding:0 20rpx 4rpx 20rpx;display:flex;justify-content:space-between;font-size:30rpx;">
+        <text wx:if="{{ orderDetail.oStatus==2 }}" style="text-decoration:underline;color:#007fff;" bindtap='goReturnGoods' data-index="{{index}}">货品详情</text>
+        <text wx:else></text>
+
+        <text style="color:#80848f;">实收数量：{{item.skCount}}{{item.skUnit}}</text>
+      </view>
+    </view>
+
+  </scroll-view>
+  <i-modal title="取消订单" visible="{{ calcelModal }}" bind:ok="handleCancel" bind:cancel="handleClose">
+    <view>确定要取消此订单吗？</view>
+  </i-modal>
+  <i-modal title="修改订单" visible="{{ editModal }}" bind:ok="handleEdit" bind:cancel="closeEdit">
+    <view style='font-size:16px;'>确定要修改吗？</view>
+    <view>(此订单将被删除，数据会恢复到购物车)</view>
+  </i-modal>
+  <view class='operation-warpper' wx:if="{{ orderDetail.oStatus==1 }}">
+    <view class='operation-btn operation-edit' bindtap='editTap'>
+      修改订单
+    </view>
+    <view class='operation-btn operation-cancel' bindtap='cancelTap'>
+      取消订单
+    </view>
+    <view class='operation-btn operation-contact' bindtap='callContact'>
+      联系客服
+    </view>
+  </view>
+  <view class='btn-warpper' bindtap='callContact' wx:else>
+    <button class='contact-btn'>
+      联系客服
+    </button>
+  </view>
+</view>

@@ -1,0 +1,46 @@
+<scroll-view class='wrapper' scroll-y>
+  <view class='head'>
+    <view class='card'>
+      <view class='topbar' style='border-bottom:1px solid #cecece;line-height:40px;height:40px;text-align:left;'>
+        <view class='name'>{{profile.name}}</view>
+        <view class='code'>{{profile.code}}</view>
+      </view>
+
+      <view class='content'>
+      <text class='phone'>✆ {{profile.phone}}</text>
+        <view style='font-weight:bold'>{{profile.warname}} </view>
+        <view>{{profile.address}},邮编:{{profile.postal}}</view>
+      </view>
+
+    </view>
+  </view>
+  <view class='menu' >
+    <view class='item' bindtap='onOpenBuyerListEvent'>
+      <text>采购订单</text>
+      <text class='info'>〉</text>
+    </view>
+    <view class='item' bindtap='onOpenApplyListEvent' >
+    <!-- wx:if="{{isexternal==1}}" -->
+      <text>申领订单</text>
+      <text class='info'>〉</text>
+    </view>
+    <view class='item' bindtap='onOpenReturnListEvent' >
+    <!-- wx:if="{{isexternal==1}}" -->
+      <text>退货申请</text>
+      <text class='info'>〉</text>
+    </view>
+    <view class='item' bindtap='onCallCenterEvent'>
+      <text>联系客服</text>
+      <text class='info'>{{callcenter}}</text>
+    </view>
+    <view class='item' bindtap='onRestartEvent'>
+      <text>重新启动</text>
+      <text class='info'>{{appver}}</text>
+    </view>
+    <view class='item' bindtap='onLogoutEvent'>
+      <text>退出账户</text>
+      <text class='info'></text>
+    </view>
+  </view>
+  <view class='skuver'>{{skuver}}</view>
+</scroll-view>

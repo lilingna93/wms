@@ -1,0 +1,70 @@
+/* pages/orderAcceptance/orderAcceptance.wxss */
+
+.order-msg{
+  font-size: 34rpx;  
+  border-bottom: 1rpx solid #dddee1;
+  padding: 8rpx;
+  color: #1c2438;
+  position: fixed;
+  top: 0;
+  background: #fff;
+  z-index: 100;
+  width: 100%;
+  box-shadow:2rpx 2rpx 12rpx #dfdfdf;
+}
+.detail-msg{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0rpx 8rpx;
+  height: 80rpx;
+  font-size: 30rpx;
+  color: #495060;
+  border-bottom: 1rpx solid #dddee1;
+}
+.confirmGoods{
+  background: #2d8cf0;
+  padding: 8rpx 10rpx;
+  border-radius: 6rpx;
+  color: #fff;
+  font-size: 32rpx;
+}
+.item-right{
+  box-sizing: border-box;
+  flex: 1;
+}
+.cart_item{
+  padding: 0 6rpx 10rpx 0;
+}
+.check_subBox{
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: centent;
+  margin: 0 20rpx;
+}
+.check image{
+  width:60rpx;
+  height:60rpx;
+}
+.btn-warpper{
+    width: 100%;
+    position: fixed;
+    bottom: 0rpx;
+    z-index: 1000;
+}
+.finsh-btn{
+    width:100%; 
+}
+.item-image image{
+  background: #e9eaec;
+}
+
+.cart_number{
+  text-align: center;
+  min-width:88rpx;
+  font-size:14px;
+  height:30px;
+  line-height:30px;
+  color: #888888;
+}

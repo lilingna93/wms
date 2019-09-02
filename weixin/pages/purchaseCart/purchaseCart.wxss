@@ -1,0 +1,91 @@
+/* pages/purchaseCart/purchaseCart.wxss */
+.topbar{
+  border-bottom: 1px solid #dedede; 
+  position: fixed;
+  top: 0px;
+  width:100%;
+  box-shadow:1px 1px 6px #dfdfdf;
+  z-index: 1000;
+  background: #fff;
+  padding-left: 6px;
+}
+.room{
+  display: inline-block;
+  font-size: 14px;
+  line-height:30px;
+  background-color: #fdfdfd;
+  width: 100%;
+  margin-top: 4px;
+  border-top:1px solid #dfdfdf;
+}
+.topbar button{
+  height:30px;
+  margin-top:5px;
+  margin-right: 10px;
+}
+.time{
+  font-size:14px;
+  line-height:30px;
+}
+.check_cart{
+  display: flex;
+  border-bottom: 1px solid #dedede;
+}
+
+.check image{
+  width:60rpx;
+  height:60rpx;
+}
+.total_bar{
+  display: flex;
+  position: fixed;
+  width: 100%;
+  bottom: 0;
+  height: 50px;
+  line-height: 50px;
+  border-top:1px solid #dedede;
+  box-shadow:0px 1px 6px #dfdfdf;
+  background: #fff;
+  z-index: 1000
+}
+.total_bar image{
+  width: 70rpx;
+  height: 70rpx;
+  margin-left: 20rpx;
+  vertical-align: middle;
+}
+.total_price{
+  flex: 1.5;
+}
+.check_all{
+  display: flex;
+  flex: 1;
+}
+.total_bar button{
+  margin:24rpx 20rpx 0 15rpx;
+}
+.active,.goshopping{background-color: #2d8cf0; color: #fff;}
+.goshopping{margin-top: 15px;}
+.cart_container{
+  height: 80%;
+  margin-top: 66px;
+  margin-bottom: 50px;
+}
+.cart_column{
+  width: calc(100% - 210rpx)
+}
+.cart_row{
+  width: 100%;
+  padding-right:0!important; 
+}
+.cart_item{
+  border:none;
+  width: calc(100% - 80rpx)
+}
+.check_subBox{
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: centent;
+  margin: 0 20rpx;
+}

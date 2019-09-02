@@ -1,0 +1,55 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/active/active",
+    "pages/mine/mine",
+    "pages/purchase/purchase",
+    "pages/purchaseCart/purchaseCart",
+    "pages/apply/apply",
+    "pages/purchaseSearch/purchaseSearch",
+    "pages/successNotice/successNotice",
+    "pages/applyCart/applyCart",
+    "pages/applySearch/applySearch",
+    "pages/applyDetail/applyDetail",
+    "pages/purchaseDetail/purchaseDetail",
+    "pages/orderAcceptance/orderAcceptance",
+    "pages/purchaseOrder/purchaseOrder",
+    "pages/applyOrder/applyOrder",
+    "pages/goodsDetail/goodsDetail",
+    "pages/returnGoods/returnGoods",
+    "pages/applyGoodsDetail/applyGoodsDetail"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#fff",
+    "navigationBarTitleText": "WeChat",
+    "navigationBarTextStyle": "black"
+  },
+  "tabBar": {
+    "color": "#858585",
+    "selectedColor": "#2d8cf0",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/purchase/purchase",
+        "text": "采购",
+        "iconPath": "images/icon/purchase.png",
+        "selectedIconPath": "images/icon/purchase_active.png"
+      },
+      {
+        "pagePath": "pages/apply/apply",
+        "text": "申领",
+        "iconPath": "images/icon/apply.png",
+        "selectedIconPath": "images/icon/apply_active.png"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的",
+        "iconPath": "images/icon/mine.png",
+        "selectedIconPath": "images/icon/mine_active.png"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

@@ -1,0 +1,67 @@
+<!--pages/apply/apply.wxml-->
+<view>
+  <view class="container" >
+    <view class="searchbar">
+      <icon class="searchicon" size='20' type='search'></icon>
+      <input class="search" placeholder="search" value="{{keyWord}}" bindinput='inputWords' />
+      <button class="searchbtn" size="mini" bindtap='searchGoods'>搜索</button>
+    </view>
+    <view class="main">
+      <view class="left">
+        <scroll-view class="type" scroll-y>
+          <view wx:for="{{skuData}}" wx:key="index" wx:for-item="typeItem" wx:for-index="idx">
+            <view wx:if="{{idx == typeIndex}}">
+              <view class="type_item active" data-index="{{idx}}" data-code="{{typeItem.tCode}}">{{typeItem.tName}}</view>
+            </view>
+            <view wx:else>
+              <view class="type_item" data-index="{{idx}}" data-code="{{typeItem.tCode}}" bindtap='triggerGoodsData'>{{typeItem.tName}}</view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+      <view class="right">
+        <scroll-view class="category" scroll-x>
+          <view class="cg_item active">全部</view>
+        </scroll-view>
+        <scroll-view class="cart" scroll-y>
+          <view wx:for="{{goodsList}}" wx:key="index" wx:for-item="goodsItem">
+            <view class="cart_item">
+              <view class="item-image">
+                <image src="{{baseImgPath}}/{{goodsItem.spImg}}.jpg"></image>
+                <text wx:if="{{cartCountDict[goodsItem.spCode] > 0}}" class='image-number'>{{cartCountDict[goodsItem.spCode]}}</text>
+              </view>
+              <view class="column">
+                <text class="title">{{goodsItem.spName}}</text>
+                <text class="brand">{{goodsItem.spBrand}}  {{goodsItem.spNorm}}</text>
+                <view class="row">
+                  <text class="sku-price">库存:{{goodsItem.spCount}}{{goodsItem.spUnit}}</text>
+                  <!-- 含有数量开始 -->
+                  <view class="cart_num" wx:if="{{null != cartCountDict[goodsItem.spCode]}}">
+                    <view class="cart_sub" data-code="{{goodsItem.spCode}}" bindtap='onSkuCountSubEvent' data-skcunit="{{goodsItem.spCunit}}">-</view>
+                    <input class="cart_count" data-stock="{{goodsItem.spCount}}" type="digit" bindblur='onSkuCountEditEvent' data-code="{{goodsItem.spCode}}" value="{{cartCountDict[goodsItem.spCode]}}" data-skcunit="{{goodsItem.spCunit}}" />
+                    <view class="cart_add" data-stock="{{goodsItem.spCount}}" data-code="{{goodsItem.spCode}}" bindtap='onSkuCountAddEvent' data-skcunit="{{goodsItem.spCunit}}">+</view>
+                  </view>
+                  <!-- 有数量结束 -->
+                  <!-- 无数量开始 -->
+                  <view wx:else class="cart_img">
+                    <image src="../../images/icon/cart.png" style='width:24px;height:24px;' data-code="{{goodsItem.spCode}}" bindtap='onSkuCountAddEvent'></image>
+                  </view>
+                  <!-- 无数量结束 -->
+                </view>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+    <view class="footer" wx-if="{{totalCount!=0}}">
+      <view class="cart_opa">
+        <image src="../../images/icon/cart_opa.png" style='width:25px;height:25px;'></image>
+        <view class="number">
+          <view class="num">{{totalCount}}</view>
+        </view>
+      </view>
+      <text class="go_order" bindtap='linkToCar'>选好了＞</text>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,79 @@
+<!--pages/orderAcceptance/orderAcceptance.wxml-->
+<view class='orderAcceptance'>
+  <i-message id="message" />
+  <view class='order-msg'>
+    单号：{{oCode}}
+  </view>
+  <scroll-view scroll-y='true' style='padding:64rpx 0 92rpx;'>
+    <view style='color:#1c2438;font-size:32rpx;padding-left:8rpx;padding-top:8rpx' wx:if="{{userIsuprectime == 2}}">
+      <picker mode="date" value="{{date}}" bindchange="bindDateChange" end="{{planEDate}}">
+        <view class="picker">
+          创建时间: {{date}}
+        </view>
+      </picker>
+    </view>
+    <view class='orderDetial-msg' wx:for="{{orderList}}" wx:for-item="items" wx:for-index="idx" wx:key="{{index}}">
+      <view class='detail-msg' >
+        <view>
+          供货商：{{items.supName}}
+        </view>
+        <view class='confirmGoods' bindtap='confirmGoods' wx:if="{{items.status==0 }}" data-index="{{idx}}">
+          确认收货
+        </view>
+        <view wx:else>
+          {{items.statusname}}
+        </view>
+      </view>
+      <view class='detail-list' wx:for="{{items.list}}" wx:key="{{index}}">
+        <view class="cart_item">
+          <view class="check" wx:if="{{confirmNum==orderList.length&&item.fast}}" bindtap='check' data-idx='{{idx}}' data-index="{{index}}" data-code="{{item.skCode}}" data-checked="{{item.checked}}">
+            <view wx:if="{{item.checked}}" class='check_subBox'>
+              <image src="../../images/icon/checked.png"></image>
+            </view>
+            <view wx:else class='check_subBox'>
+              <image src="../../images/icon/check.png"></image>
+            </view>
+          </view>
+          <view class="item-image">
+            <image src="{{baseImgPath}}{{item.skImg}}"></image>
+          </view>
+          <view class="column item-right">
+            <text class="title">{{item.spName}}</text>
+            <text class="brand">{{item.skNorm}}</text>
+            <view class="row">
+              <text class="sku-price">￥{{item.skPrice}}</text>
+              <view class="cart_num" wx:if="{{ items.status==0}}">
+                <view class="cart_sub" data-code="{{item.skCode}}" bindtap='onSkuCountSub' data-idx="{{idx}}" data-index="{{index}}" data-spcunit="{{item.spCunit}}">-</view>
+                <input class="cart_count" type="digit" bindblur='onSkuCountEdit' data-idx="{{idx}}" data-index="{{index}}" data-code="{{item.skCode}}" data-spcunit="{{item.spCunit}}" value="{{item.skNum}}" />
+                <view class="cart_add" data-code="{{item.skCode}}" bindtap='onSkuCountAdd' data-idx="{{idx}}" data-index="{{index}}" data-spcunit="{{item.spCunit}}">+</view>
+              </view>
+              <view class='cart_number' wx:else>
+                <view>{{item.skNum}}{{item.skUnit}}
+                  <text wx:if="{{item.checked}}" style='color:#2d8cf0;font-size:16px'>【直入直出】</text>
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+  <i-modal title="完成订单" visible="{{ finshModal }}" bind:ok="handleFinsh" bind:cancel="handleClose">
+    <view>确定要完成此订单吗？</view>
+  </i-modal>
+  <i-modal title="直入直出货品确认" visible="{{ isFastModal }}" bind:ok="handleFast" bind:cancel="handleCloFast">
+    <scroll-view scroll-y='true' style="max-height: 380px;">
+      确定要将选中的货品设为直入直出吗？
+      <view wx:for="{{fastList}}" style="color:red" wx:for-item="items" wx:for-index="idx" wx:key="{{index}}">{{items.spName}} {{items.skNum}} {{items.skUnit}}</view>
+    </scroll-view>
+  </i-modal>
+  <i-modal visible="{{ modal }}" actions="{{ actionsTxt }}" bind:click="actionsTap">
+    <view>采购单下单完成</view>
+  </i-modal>
+  <i-modal title="确认收货" visible="{{ confirmModal }}" bind:ok="handleConfirm" bind:cancel="handleCancel">
+    <view>确认收货？</view>
+  </i-modal>
+  <button class='finsh-btn btn-warpper' type="primary" bindtap='finshOrder' wx:if="{{ confirmNum==orderList.length}}" disabled="{{disabled}}">
+    确认写入进销存系统
+  </button>
+</view>

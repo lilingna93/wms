@@ -1,0 +1,61 @@
+<view class='wrapper'>
+<view class='obar'>
+    货品详情<text class='code'>{{goodsCode}}</text>
+  </view>
+  <view class='info'>
+    <view class='item' >
+      <text class="title">名称：</text>
+      <text class='value'>{{goods["name"]}}</text>
+    </view>
+    <view class='item' >
+      <text class="title">品牌：</text>
+      <text class='value'>{{goods["brand"]}}</text>
+    </view>
+    <view class='item' >
+      <text class="title">规格：</text>
+      <text class='value'>{{goods["norm"]}}</text>
+    </view>
+    <view class='item' >
+      <text class="title">单价：</text>
+      <text class='value'>{{goods["price"]}} 元/{{goods["unit"]}}</text>
+    </view>
+    <view class='item' >
+      <text class="title">数量：</text>
+      <text class='value'>{{goods["count"]}} {{goods["unit"]}}</text>
+    </view>
+    <view class='item' >
+      <text class="title">实收：</text>
+      <text class='value'>{{goods["rcount"]}} {{goods["unit"]}}</text>
+    </view>
+    <!-- <view class='item' >
+      <text class="title">批次剩余：</text>
+      <text class='value'></text>
+    </view> -->
+  </view>
+  <view class='obar'>
+    更多操作
+    <view class="open">
+    退货
+    <switch  checked bindchange="onClickEventForReturn" checked = "{{isReturnOper}}"/>
+    </view>
+  </view>
+  <view class='oper' wx:if="{{isReturnOper}}">
+    <picker bindchange="onClickEventForReason" value="{{reasonIdx}}" range="{{reasons}}">
+      <view class="item">
+            <text class="title">原因：</text>
+            <text class="guide">(请根据实际情况选择)</text>
+            <view class='count'>
+              <text class='value'>{{reasons[reasonIdx]}}</text>
+            </view>
+      </view>
+    </picker>
+    <view class="item">
+            <text class="title">数量：</text>
+            <text class="guide">(请如实填写退回数量，单位：{{goods["unit"]}})</text>
+            <view class='count'>
+              <input type="digit" value="" class='inp' bindinput="onInputEventForCount"/>
+            </view>
+    </view>
+    <view class='submit' bindtap='onClickEventForSubmit'>提交退货申请</view>
+  </view>
+</view>

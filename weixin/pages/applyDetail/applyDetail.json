@@ -1,0 +1,6 @@
+{
+  "usingComponents": {
+    "i-modal": "../../iview/modal/index"
+  },
+  "navigationBarTitleText": "订单详情"
+}

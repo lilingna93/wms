@@ -1,0 +1,36 @@
+<!--pages/successNotice/successNotice.wxml-->
+<!--pages/successNotice/successNotice.wxml-->
+<!-- <text>您已下单成功!</text>
+<view><a  bindtap="linkMine" style="color:blue;text-decoration:underline">我的</a>-- 采购订单</view>
+<view><a href="javasrcipt:;" bindtap="linkPurchaseIndex" style="color:blue;text-decoration:underline">继续下单</a></view> -->
+
+
+
+<view class="wrapper">
+  <view class="msg">
+    <view class='head'>
+      <view class="tip">
+        <view>
+          订单创建成功
+        </view>
+        <view style='font-size:16px;color:red;margin-top:6px'>
+        （{{message}}）
+        </view>
+      </view>
+      <!-- <view class="code">
+        订单编号：O00123123123123
+      </view> -->
+    </view>
+    <view class="nav">
+      <view class="btn" style='float:left' bindtap="linkTarget">
+        继续下单
+      </view>
+      <view class="btn" style='float:right' bindtap="linkMine">
+        我的订单
+      </view>
+    </view>
+  </view>
+  <view class="info">
+    提示：每日可多次创建订单，订单创建后可到我的订单中查看订单详情，如遇到需要修改的情况，请及时与客服联系处理。
+  </view>
+</view>
