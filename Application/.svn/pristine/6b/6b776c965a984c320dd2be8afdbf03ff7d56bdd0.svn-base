@@ -1,0 +1,472 @@
+<?php
+/**
+ * Created by PhpStorm.
+ * User: lingn
+ * Date: 2019/5/30
+ * Time: 10:24
+ */
+
+namespace Erp\Service;
+
+use Common\Service\PassportService;
+use Erp\Dao\ReceiptDao;
+use Erp\Dao\SpuDao;
+use Erp\Dao\SkuDao;
+
+/**
+ * Class SpuService
+ * @package Erp\Service
+ * 商品管理
+ */
+class SpuService
+{
+    private $SPU_TYPE = array("1" => "商品", "2" => "外包装箱", "3" => "内包装纸袋", "4" => "赠品");
+
+    public function __construct()
+    {
+//        $workerData = PassportService::getInstance()->loginUser();
+//
+//        if (empty($workerData)) {
+//            venus_throw_exception(110);
+//        }
+        $this->warCode = $workerData["war_code"] = 'WA000001';//'WA000001';//
+        $this->worCode = $workerData["wor_code"] = 'WO40428134019222';//'客服';
+//        $this->worCode = $workerData["wor_code"];// = 'WO40428134034434';//'仓库';
+    }
+
+    /**
+     * @return array
+     * 创建商品
+     */
+    public function create_spu($param)
+    {
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+        $data = $param['data'];
+        $spuData = $data['spu'];
+        $skuData = $data['sku'];
+
+
+        $spuModel = SpuDao::getInstance();
+        $skuModel = SkuDao::getInstance();
+
+
+        /**
+         * spu数据
+         */
+        if (empty($spuData['name'])) return array(false, array(), "spu商品名称不能为空");//商品名称
+        if (empty($spuData['type'])) return array(false, array(), "spu分类不能为空");//分类：1商品；2外包装箱；3内包装纸袋；4赠品
+        if (empty($spuData['sellmode'])) return array(false, array(), "spu售卖方式不能为空");//售卖方式
+        if (empty($spuData['unit'])) return array(false, array(), "spu计量单位不能为空");//计量单位
+        if (empty($spuData['storetype'])) return array(false, array(), "spu保存方式不能为空");//保存方式
+        if (empty($spuData['brand'])) return array(false, array(), "spu品牌不能为空");//品牌
+//        if (empty($spuData['img'])) return array(false, array(), "spu图片不能为空");//图片
+
+        if (count($skuData) < 1) return array(false, array(), "请创建sku");
+
+        $isSucess = true;
+        venus_db_starttrans();
+        $spuListCount = $spuModel->queryCountByCondition();
+        $spuCodeLast = $spuListCount + 1;
+        $createSpuData = array(
+            "code" => "ESP" . str_pad($spuCodeLast, 5, 0, STR_PAD_LEFT),
+            "name" => $spuData['name'],
+            "type" => $spuData['type'],
+            "storetype" => $spuData['storetype'],
+            "brand" => $spuData['brand'],
+            "unit" => $spuData['unit'],
+            "sellmode" => $spuData['sellmode'],
+            "img" => $spuData['img']
+        );
+        $spuCode = $spuModel->insert($createSpuData);
+        $isSucess = $isSucess && !empty($spuCode);
+        $commonSkuCode = str_ireplace("P", "K", $spuCode);
+
+        $num = 1;
+        foreach ($skuData as $key => $skuDatum) {
+            if (empty($skuDatum['name'])) return array(false, array(), "sku商品名称不能为空");
+            if (empty($skuDatum['norm'])) return array(false, array(), "sku规格不能为空");
+            if (empty($skuDatum['weight'])) return array(false, array(), "sku重量不能为空");
+            if (empty($skuDatum['volume'])) return array(false, array(), "sku体积不能为空");
+            if (empty($skuDatum['unit'])) return array(false, array(), "sku计量单位不能为空");
+            if (empty($skuDatum['from'])) return array(false, array(), "sku所属店铺不能为空");
+            if (empty($skuDatum['mark'])) return array(false, array(), "sku标识不能为空");
+//            if ($spuData['type'] == 1 && empty($skuDatum['inner'])) return array(false, array(), "sku内包装不能为空");
+//            if ($spuData['type'] == 1 && empty($skuDatum['outer'])) return array(false, array(), "sku外包装不能为空");
+            $spuCount = floatval(bcdiv($skuDatum['weight'], 1, 2));
+//            if (empty($skuDatum['img'])) return array(false, array(), "sku图片不能为空");
+
+            $skuCode = $commonSkuCode . "-" . $num;
+            $createSkuData = array(
+                "code" => $skuCode,
+                "name" => $skuDatum['name'],
+                "norm" => $skuDatum['norm'],
+                "weight" => $skuDatum['weight'],
+                "volume" => $skuDatum['volume'],
+                "unit" => $skuDatum['unit'],
+                "spuCode" => $spuCode,
+                "spuCount" => $spuCount,
+                "from" => $skuDatum['from'],
+                "img" => $skuDatum['img'],
+                "inner" => $skuDatum['inner'],
+                "outer" => $skuDatum['outer'],
+                "mark" => $skuDatum['mark'],
+            );
+            $createSkuRes = $skuModel->insert($createSkuData);
+            $isSucess = $isSucess && $createSkuRes;
+            $num++;
+        }
+
+        if (!$isSucess) {
+            venus_db_rollback();
+            return array(false, array(), "创建失败");
+        } else {
+            venus_db_commit();
+            return array(true, array("code" => $spuCode), "创建商品成功");
+        }
+    }
+
+
+    /**
+     * @return array
+     * 搜索货品
+     */
+    public function search($param)
+    {
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+        $data = $param['data'];
+        $pageCurrent = $data['pageCurrent'];//当前页数
+        if (empty($pageCurrent)) {
+            $pageCurrent = 0;
+        }
+        $clause = array();
+        if (empty($spuData['code'])) $clause['code'] = $data['code'];
+        if (empty($spuData['name'])) $clause['name'] = $data['name'];
+        if (empty($spuData['brand'])) $clause['brand'] = $data['brand'];
+        if (empty($spuData['type'])) $clause['type'] = $data['type'];
+
+        $spuModel = SpuDao::getInstance();
+        $skuModel = SkuDao::getInstance();
+
+
+        $totalCount = $spuModel->queryCountByCondition($clause);
+        if (!empty($data['pageSize'])) {
+            $pageLimit = pageLimit($totalCount, $pageCurrent, $data['pageSize']);
+        } else {
+            $pageLimit = pageLimit($totalCount, $pageCurrent);
+        }
+
+        $spuDataList = $spuModel->queryListByCondition($clause, $pageLimit['page'], $pageLimit['pSize']);
+
+        if ($this->worCode == C("LOING_INFO.1")) {
+            $role = "1";
+        } elseif ($this->worCode == C("LOING_INFO.2")) {
+            $role = "2";
+        }
+
+        $data = array(
+            "pageCurrent" => $pageCurrent,
+            "pageSize" => $pageLimit['pageSize'],
+            "totalCount" => $totalCount,
+            "role" => $role,
+        );
+
+
+        $innerCount = $skuModel->queryCountByCondition(array("sputype" => 3));
+        $innerDataList = $skuModel->queryListByCondition(array("sputype" => 3), 0, $innerCount);
+
+        $innerDataArr = array();
+        foreach ($innerDataList as $innerData) {
+            $innerDataArr[$innerData['sku_code']] = $innerData['sku_name'];
+        }
+        $outerCount = $skuModel->queryCountByCondition(array("sputype" => 2));
+        $outerDataList = $skuModel->queryListByCondition(array("sputype" => 2), 0, $outerCount);
+
+        $outerDataArr = array();
+        foreach ($outerDataList as $outerData) {
+            $outerDataArr[$outerData['sku_code']] = $outerData['sku_name'];
+        }
+
+        foreach ($spuDataList as $spuData) {
+            $spuArr = array(
+                "img" => $spuData['spu_img'],//img(图片)
+                "code" => $spuData['spu_code'],//code(货号)
+                "name" => $spuData['spu_name'],//name(商品名称),
+                "type" => $spuData['spu_type'],//type(分类：1商品；2外包装箱；3内包装纸袋；4赠品),
+                "typeMsg" => $this->SPU_TYPE[$spuData['spu_type']],//type(分类：1商品；2外包装箱；3内包装纸袋；4赠品),
+                "unit" => $spuData['spu_unit'],//unit(计量单位),
+                "brand" => $spuData['spu_brand'],//brand(品牌)
+                "sellmode" => $spuData['spu_sellmode'],
+                "storetype" => $spuData['spu_storetype'],
+            );
+            $spuCode = $spuData['spu_code'];
+            $clause = array(
+                "spucode" => $spuCode
+            );
+            $skuDataArr = array();
+            $totalSkuCount = $skuModel->queryCountByCondition($clause);
+            $skuDataList = $skuModel->queryListByCondition($clause, 0, $totalSkuCount);
+
+
+            foreach ($skuDataList as $skuData) {
+
+                $skuDataArr[] = array(
+                    "code" => $skuData['sku_code'],
+                    "name" => $skuData['sku_name'],
+                    "norm" => $skuData['sku_norm'],
+                    "weight" => $skuData['sku_weight'],
+                    "volume" => $skuData['sku_volume'],
+                    "from" => $skuData['sku_from'],
+                    "unit" => $skuData['sku_unit'],
+                    "innerCode" => $skuData['sku_inner'],
+                    "inner" => $innerDataArr[$skuData['sku_inner']],
+                    "outer" => $outerDataArr[$skuData['sku_outer']],
+                    "outerCode" => $skuData['sku_outer'],
+                    "img" => $skuData['sku_img'],
+                    "mark" => $skuData['sku_mark'],
+                );
+            }
+            $data['list'][] = array(
+                "spu" => $spuArr,
+                "sku" => $skuDataArr
+            );
+        }
+
+        return array(true, $data, "");
+    }
+
+    /**
+     * @param $param
+     * @return array
+     * 修改sku信息
+     */
+    public function update_sku($param)
+    {
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+        $skuData = $param['data'];
+        $skuModel = SkuDao::getInstance();
+
+        /**
+         * spu数据
+         */
+        if (empty($skuData['code'])) return array(false, array(), "sku商品编号不能为空");
+        if (substr($skuData['code'], 0, 3) != "ESK") return array(false, array(), "sku商品编号不符合标准");
+        if (empty($skuData['name'])) return array(false, array(), "sku商品名称不能为空");
+        if (empty($skuData['norm'])) return array(false, array(), "sku规格不能为空");
+        if (empty($skuData['weight'])) return array(false, array(), "sku重量不能为空");
+        if (empty($skuData['volume'])) return array(false, array(), "sku体积不能为空");
+        if (empty($skuData['mark'])) return array(false, array(), "sku标识不能为空");
+
+        $spuCount = floatval(bcdiv(trim($skuData['weight']), 1, 2));
+
+        $oldSkuData = $skuModel->queryByCode($skuData['code']);
+//        if ($oldSkuData['spu_type'] == 1 && empty($skuData['inner'])) return array(false, array(), "sku内包装不能为空");
+//        if ($oldSkuData['spu_type'] == 1 && empty($skuData['outer'])) return array(false, array(), "sku外包装不能为空");
+        $updateSkuData = array();
+        if (trim($skuData["name"]) != $oldSkuData['sku_name']) $updateSkuData['sku_name'] = trim($skuData['name']);
+        if (trim($skuData["norm"]) != $oldSkuData['sku_norm']) $updateSkuData['sku_norm'] = trim($skuData['norm']);
+        if (trim($skuData["weight"]) != $oldSkuData['sku_weight']) $updateSkuData['sku_weight'] = trim($skuData['weight']);
+        if (trim($skuData["volume"]) != $oldSkuData['sku_volume']) $updateSkuData['sku_volume'] = trim($skuData['volume']);
+        if (trim($skuData["inner"]) != $oldSkuData['sku_inner']) $updateSkuData['sku_inner'] = trim($skuData['inner']);
+        if (trim($skuData["outer"]) != $oldSkuData['sku_outer']) $updateSkuData['sku_outer'] = trim($skuData['outer']);
+        if (trim($skuData["mark"]) != $oldSkuData['sku_mark']) $updateSkuData['sku_mark'] = trim($skuData['mark']);
+        if ($spuCount != $oldSkuData["spu_count"]) $updateSkuData['spu_count'] = $spuCount;
+        if (empty($updateSkuData)) return array(false, array(), "无需要更新的数据，请确认修改");
+        $updateSkuRes = $skuModel->updateByCode($updateSkuData, $skuData['code']);
+        if ($updateSkuRes) {
+            return array(true, array(), "修改sku数据成功");
+        } else {
+            return array(false, array(), "修改sku数据失败，请重新提交");
+        }
+
+    }
+
+    /**
+     * @param $param
+     * @return array
+     * 增加sku
+     */
+    public function add_sku($param)
+    {
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+        $data = $param['data'];
+        $skuModel = SkuDao::getInstance();
+        $spuModel = SpuDao::getInstance();
+
+        if (empty($data['name'])) return array(false, array(), "sku商品名称不能为空");
+        if (empty($data['norm'])) return array(false, array(), "sku规格不能为空");
+        if (empty($data['weight'])) return array(false, array(), "sku重量不能为空");
+        if (empty($data['volume'])) return array(false, array(), "sku体积不能为空");
+        if (empty($data['unit'])) return array(false, array(), "sku计量单位不能为空");
+        if (empty($data['from'])) return array(false, array(), "sku所属店铺不能为空");
+        if (empty($data['mark'])) return array(false, array(), "sku标识不能为空");
+        $spuCount = floatval(bcdiv(trim($data['weight']), 1, 2));
+//            if (empty($skuDatum['img'])) return array(false, array(), "sku图片不能为空");
+        $spuCode = $data['spucode'];
+        $spuData = $spuModel->queryByCode($spuCode);
+//        if ($spuData == 1 && empty($data['inner'])) return array(false, array(), "sku内包装不能为空");
+//        if ($spuData == 1 && empty($data['outer'])) return array(false, array(), "sku外包装不能为空");
+
+        $commonSkuCode = str_ireplace("P", "K", $spuCode);
+        $lastSkuData = $skuModel->queryListByCondition(array("spucode" => $spuCode), 0, 1);
+        if (!empty($lastSkuData)) {
+            $count = explode("-", $lastSkuData[0]['sku_code'])[1] - 0;
+        } else {
+            $count = 0;
+        }
+        $count++;
+        $skuCode = $commonSkuCode . "-" . $count;
+        $issetSkuCode = $skuModel->queryCountByCondition(array("code" => $skuCode));
+        if ($issetSkuCode != 0) $count++;
+        $skuCode = $commonSkuCode . "-" . $count;
+        $createSkuData = array(
+            "code" => $skuCode,
+            "name" => trim($data['name']),
+            "norm" => trim($data['norm']),
+            "weight" => trim($data['weight']),
+            "volume" => trim($data['volume']),
+            "unit" => trim($data['unit']),
+            "spuCode" => $spuCode,
+            "spuCount" => $spuCount,
+            "from" => trim($data['from']),
+            "img" => trim($data['img']),
+            "inner" => trim($data['inner']),
+            "outer" => trim($data['outer']),
+            "mark" => trim($data['mark']),
+        );
+        $createSkuRes = $skuModel->insert($createSkuData);
+        if ($createSkuRes) {
+            return array(true, array(), "创建sku数据成功");
+        } else {
+            return array(false, array(), "创建sku数据失败，请重新提交");
+        }
+    }
+
+    /**
+     * @param $param
+     * @return array
+     * 删除spu数据
+     */
+    public function delete_spu($param)
+    {
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+        $data = $param['data'];
+
+        $skuModel = SkuDao::getInstance();
+        $spuModel = SpuDao::getInstance();
+        $recModel = ReceiptDao::getInstance();
+
+        $spuCode = $data['code'];
+        $spuData = $spuModel->queryByCode($spuCode);
+        if ($spuData['spu_type'] == 1) {
+            $skuTotalCount = $recModel->queryCountByCondition(array("goodsCode" => $spuCode));
+        } else {
+            if ($spuData['spu_type'] == 2) {
+                $skuData = $skuModel->queryListByCondition(array("spu_code" => $spuCode), 0, 1000);
+                $codeArr = array_column($skuData, "sku_code");
+                if (!empty($codeArr)) {
+                    $skuDataTotalCount = $skuModel->queryCountByCondition(array("outer" => array("in", $codeArr)));
+                    $skuRecTotalCount = $recModel->queryCountByCondition(array("goodsCode" => array("in", $codeArr)));
+                    $skuTotalCount = floatval(bcadd($skuDataTotalCount, $skuRecTotalCount, 2));
+                } else {
+                    $skuTotalCount = 0;
+                }
+            } elseif ($spuData['spu_type'] == 3) {
+                $skuData = $skuModel->queryListByCondition(array("spu_code" => $spuCode), 0, 1000);
+                $codeArr = array_column($skuData, "sku_code");
+                if (!empty($codeArr)) {
+                    $skuDataTotalCount = $skuModel->queryCountByCondition(array("inner" => array("in", $codeArr)));
+                    $skuRecTotalCount = $recModel->queryCountByCondition(array("goodsCode" => array("in", $codeArr)));
+                    $skuTotalCount = floatval(bcadd($skuDataTotalCount, $skuRecTotalCount, 2));
+                } else {
+                    $skuTotalCount = 0;
+                }
+
+            } else {
+                $skuData = $skuModel->queryListByCondition(array("spu_code" => $spuCode), 0, 1000);
+                $codeArr = array_column($skuData, "sku_code");
+                if (!empty($codeArr)) {
+                    $skuTotalCount = $recModel->queryCountByCondition(array("goodsCode" => array("in", $codeArr)));
+                } else {
+                    $skuTotalCount = 0;
+                }
+            }
+
+        }
+
+        if ($skuTotalCount != 0) return array(false, array(), "此spu下存在库存,不可删除");
+
+        $isSuccess = true;
+        venus_db_starttrans();
+        $isSuccess = $isSuccess && $skuModel->deleteBySpuCode($spuCode);
+        $isSuccess = $isSuccess && $spuModel->deleteByCode($spuCode);
+
+        if ($isSuccess) {
+            venus_db_commit();
+            return array(true, array(), "删除spu数据成功");
+        } else {
+            venus_db_rollback();
+            return array(false, array(), "删除spu数据失败，请重新提交");
+        }
+
+    }
+
+    /**
+     * @param $param
+     * @return array
+     * 删除sku数据
+     */
+    public
+    function delete_sku($param)
+    {
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+        $data = $param['data'];
+
+        $skuModel = SkuDao::getInstance();
+        $recModel = ReceiptDao::getInstance();
+        $spuModel = SpuDao::getInstance();
+
+        $skuCode = $data['code'];
+        $skuData = $skuModel->queryByCode($skuCode);
+
+        $clause = array();
+        if ($skuData['spu_type'] == 2) {
+            $clause["outer"] = $skuCode;
+            $skuTotalCount = $skuModel->queryCountByCondition($clause);
+        } elseif ($skuData['spu_type'] == 3) {
+            $clause["inner"] = $skuCode;
+            $skuTotalCount = $skuModel->queryCountByCondition($clause);
+        } else {
+            $skuTotalCount = 0;
+        }
+        $clause = array(
+            "goodsCode" => $skuCode
+        );
+        $skuRecTotalCount = $recModel->queryCountByCondition($clause);
+
+        if ($skuTotalCount == 0 && $skuRecTotalCount == 0) {
+            $deleteSkuRes = $skuModel->deleteByCode($skuCode);
+            if ($deleteSkuRes) {
+                return array(true, array(), "删除sku数据成功");
+            } else {
+                return array(false, array(), "删除sku数据失败，请重新尝试");
+            }
+        } else {
+            return array(false, array(), "删除sku数据失败，已有相关库存数据");
+        }
+
+    }
+
+
+}

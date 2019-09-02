@@ -1,0 +1,402 @@
+<?php
+
+namespace Erp\Service;
+
+use Common\Service\ExcelService;
+use Common\Service\PassportService;
+use Erp\Dao\ShopordersDao;
+use Erp\Dao\ShoporderdetailDao;
+
+class OrderonlineService {
+
+    public $waCode;
+
+    function __construct()
+    {
+        $workerData = PassportService::getInstance()->loginUser();
+        //\Think\Log::write(json_encode(session_id()),'zk0418');
+        //\Think\Log::write(json_encode($workerData),'zk0418');
+
+        if(empty($workerData)){
+            venus_throw_exception(110);
+        }
+        $this->warCode = $workerData["war_code"];//'WA000001';//
+        $this->worCode = $workerData["wor_code"];//'WO40428134034434';//
+        /*$this->warCode = 'WA000001';
+        $this->worCode = 'WO40428134019222';*/
+        
+    }
+    //店铺列表
+    public function store_list(){
+      $orderModel = ShopordersDao::getInstance($this->warCode);  
+      $data = $orderModel->queryByStoreId();
+      return  array(true, $data, '店铺列表查询成功');
+    }
+    //
+    public function order_list(){
+        $post = $_POST['data'];
+        $shopId = $post['shopId'];
+        $orderNum = $post['tradeNum'];
+        $mobile = $post['mobile'];
+        $buyerName = $post['buyerName'];
+        $page = $post['pageCurrent'];
+        $count = $post['pageSize'];
+        if(!empty($shopId)){
+            $condition['shop_id'] = $shopId;
+        }
+        if(!empty($orderNum)){
+            $condition['tradenum'] = $orderNum;
+        }
+        if(!empty($mobile)){
+            $condition['buyer_mobile'] = $mobile;
+        }
+        if(!empty($buyerName)){
+            $condition['buyer_name'] = $buyerName;
+        }
+        $list = array();
+        if($this->worCode == 'WO40428134019222'){
+            $condition['logistics_status'] = array('in', array(0,1,2,3)); 
+            $role = 1;
+        }elseif($this->worCode == 'WO40428134034434'){
+            //$condition['logistics_status'] = 2;
+            $condition['logistics_status'] = array('in', array(2,3)); 
+            $role = 2;
+        }
+        $orderModel = ShopordersDao::getInstance($this->warCode);
+        $list = $orderModel->queryBySearch($condition, $page, $count);
+        $list['role'] = $role;
+        return array(true, $list, '');
+
+    }
+    //method taobao.trade.get
+    public function order_detail(){
+
+    }
+    
+    //客服审核通过/批量审核通过
+    public function status_update(){
+        $status = $_POST['data']['status'];
+        $ids = $_POST['data']['ids'];//审核通过的id
+        $orderModel = ShopordersDao::getInstance($warCode);
+        /*$res = $orderModel->querymsgById($id);
+        if(!$res){
+            return array(false, '', '未查询到数据');
+        }
+        if($res["logistics_status"] !== 0){
+            return array(false, '', '订单状态不对哦');
+        }*/
+
+        $data = $orderModel->updateByIds($ids, 1);
+        return array(true, '', '审核通过');
+    }
+
+    //打印面单//批量打印面单生成excel
+    public function get_pdf(){
+        $ids = $_POST['data']['ids'];
+        $orderModel = ShopordersDao::getInstance($warCode);
+        $data = $orderModel->querymsgByIds($ids);
+        $res = $this->make_pdf($data);
+        $excel = $this->get_excel($ids);
+        $updateTime = $this->updated_at($ids);
+        $url['pdf'] = $res;
+        $url['excel'] = $excel;
+        if($res){
+            $result = $orderModel->updateByIds($ids, 3);
+            if(!$result){
+                return array(false, '', '面单下载失败');
+            }
+        }     
+        return array(true, $url, '打印面单成功');
+    }
+
+    //将图片转换成PDF
+    public function make_pdf($arr){
+        $im = new \Imagick();   
+        for( $i=0;$i<count($arr);$i++ ) 
+        { 
+            $auxIMG = new \Imagick(); 
+            $auxIMG->readImage($arr[$i]['logistics_img']);
+            $im->addImage($auxIMG); 
+        }
+        //\Think\Log::write(json_encode('come in'),'zk0505c');
+        $name = md5(time());
+        $time = date("Ymd");
+        $fileurl =  $_SERVER['DOCUMENT_ROOT'].'/Public/files/erp/'.$time;
+        if(!is_dir($fileurl)){
+            mkdir($fileurl);
+        }
+        $url = $fileurl.'/'.$name.'.pdf';
+        $res = $im->writeImages($url, true); 
+        $link = $time.'/'.$name.'.pdf';//$_SERVER['HTTP_HOST'].'/static/Pdfs/'.$time.'/'.$name.'.pdf';
+        if($res){
+            $im->destroy();
+            $auxIMG->destroy();
+            return $link;//生成的PDF路径
+        }
+    }
+    //修改更新时间
+    public function updated_at($ids){
+        $result = ShopordersDao::getInstance($warCode)->updatedTime($ids);
+        if(!$result){
+            return array(false, '', '更新订单时间失败');
+        }
+    }
+
+    //EXcel订单导入
+    public function order_import(){
+        $shopId = 1;
+        $shopmes = array(
+            'name' => '禾先生',
+            'shop_id' => 1,
+            'shop_type' => 0,
+        );
+        $datas = ExcelService::getInstance()->upload("file");
+        $dicts = array(
+            "A" => "tradenum",//订单单号
+            "B" => "buyer_name",//收货人姓名
+            "D" => "partner_trade_no",//支付单号
+            "F" => "price_total",//买家应付款
+            "I" => "total_fee",//总金额
+            "M" => "order_status",//订单状态---需要二次处理  
+            "P" => "address",//收货地址---需要二次处理
+            "S" => "buyer_mobile",//联系手机号
+            "T" => "created_at",//订单创建时间
+            "U" => "partner_trade_no",//订单付款时间
+            "V" => "goods_name",//商品标题
+            "X" => "logistics_num",//物流单号---需要二次处理
+            //"" => "",//
+            //"" => "seller_message",//卖家订单备注
+            "AA" => "num",//商品数量
+            //"Y" => "",//扣款商家金额
+        );
+
+        $skuList = array();
+        foreach ($datas as $sheetName => $list) {
+            unset($list[0]);
+            $skuList = array_merge($skuList, $list);
+        }
+
+        venus_db_starttrans();//启动事务
+        $result = true;
+        $filter[0] = "/=/";
+        $filter[1] = '/"/';
+        $filter[2] = "/'/";
+        $filtered[2] = "";
+        $filtered[1] = "";
+        $filtered[0] = "";
+        foreach ($skuList as $index => $orderItem) {
+            $orderData = array();
+            foreach ($dicts as $col => $key) {
+                $orderData[$key] = isset($orderItem[$col]) ? preg_replace($filter, $filtered, $orderItem[$col]) : "";
+            }
+            if(!empty($orderData['address'])){
+                $address = explode(' ', $orderData['address']);
+                $orderData['buyer_state'] = $address[0];
+                $orderData['buyer_city'] = $address[1];
+                $orderData['buyer_district'] = $address[2];
+                $orderData['buyer_address'] = $address[3];
+            }
+            $orderStatus = $orderData['order_status'];
+            if(!empty($orderStatus)){
+                if($orderStatus == '买家已付款，等待卖家发货'){
+                    $orderData['logistics_status'] = 0;
+                }else{
+                    continue;
+                } 
+            }
+            $orderData['order_id'] = $this->get_trade_no();
+
+            if (trim($orderData['tradenum']) == '' || trim($orderData['partner_trade_no']) == '') {
+                if (trim($orderData['address']) == '' && trim($orderData['buyer_mobile']) == '') {
+                    continue;
+                } else {
+                    if (trim($orderData['address']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "买家地址不能为空");
+                        return false;
+                    }
+                    if (trim($orderData['buyer_mobile']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "买家手机号不能为空");
+                        return false;
+                    }
+
+                   /* if (trim($orderData['firstWarning']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "商品不足报警值不能为空");
+                        return false;
+                    }
+
+                    if (trim($orderData['secondWarning']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "商品严重不足报警值不能为空");
+                        return false;
+                    }*/
+                }
+            } else {
+                $orderModel = ShopordersDao::getInstance($warCode);
+                //查询订单号判断该订单是否已经存在
+                $res = $orderModel->querymsgByTradenum($orderData['tradenum']);
+                if($res){
+                    continue;
+                }
+                $result = $result && $orderModel->insert($orderData, $shopmes);
+            }
+            
+        }
+        if ($result) {
+            venus_db_commit();
+            /*$SkuService = new SkuService();
+            $SkuService->release_latestsku();*/
+            $success = true;
+            $message = "店铺订单导入成功";
+
+        } else {
+            venus_db_rollback();
+            $success = false;
+            $message = "店铺订单导入失败";
+        }
+        return array($success, "", $message);
+    }
+
+    //订单内部编号导入
+    public function number_import(){
+        $datas = ExcelService::getInstance()->upload("file");
+        $dicts = array(
+            "A" => "tradenum",//订单单号
+            "D" => "num",//购买数量
+            "E" => "merchant",//外部编号
+        );
+        $skuList = array();
+        foreach ($datas as $sheetName => $list) {
+            unset($list[0]);
+            $skuList = array_merge($skuList, $list);
+        }
+
+        venus_db_starttrans();//启动事务
+        $result = true;
+        $filter[0] = "/=/";
+        $filter[1] = '/"/';
+        $filter[2] = "/'/";
+        $filtered[2] = "";
+        $filtered[1] = "";
+        $filtered[0] = "";
+        $orderModel = ShopordersDao::getInstance($warCode);
+        foreach ($skuList as $index => $orderItem) {
+            $orderData = array();
+            foreach ($dicts as $col => $key) {
+                $orderData[$key] = isset($orderItem[$col]) ? preg_replace($filter, $filtered, $orderItem[$col]) : "";
+            }
+            if(!empty($orderData['tradenum'])){
+                //判断该订单是否在订单列表
+                $res = $orderModel->querymsgByTradenum($orderData['tradenum']);
+                $orderData['order_id'] = $res['order_id'];
+
+            }
+            if (trim($orderData['tradenum']) == '') {
+                if (trim($orderData['merchant']) == '' && trim($orderData['num']) == '') {
+                    continue;
+                } else {
+                    if (trim($orderData['merchant']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "外部编号不能为空");
+                        return false;
+                    }
+                    if (trim($orderData['num']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "商品数量不能为空");
+                        return false;
+                    }
+                }
+            } else { 
+                //查询订单号判断该订单是否已经存在
+                $res = $orderModel->querymsgByTradenum($orderData['tradenum']);
+
+                $detail = ShoporderdetailDao::getInstance($this->warCode);
+                if($res){
+                    $result = $result && $detail->insert($orderData, $shopmes);
+                }else{
+                    continue;
+                }
+                
+            }
+            
+        }
+        if ($result) {
+            venus_db_commit();
+            /*$SkuService = new SkuService();
+            $SkuService->release_latestsku();*/
+            $success = true;
+            $message = "订单外部编号导入成功";
+
+        } else {
+            venus_db_rollback();
+            $success = false;
+            $message = "订单外部编号导入失败";
+        }
+        return array($success, "", $message);
+    }
+    //生成面单的excel
+    public function get_excel($ids){
+        $goodsData = ShopordersDao::getInstance($warCode)->goodsList($ids);
+        $goodData = array();
+        $fname = "面单对应货品表";
+        $header = array("内部订单编号", "订单号","收货人姓名", "联系手机号", "订单备注"/*, "宝贝标题"*/, "宝贝数量", "货品编号");
+        
+        foreach ($goodsData as $index => $goodsItem) {
+            $goodsList = array(
+                "order_id" => $goodsItem['order_id'],
+                "tradeNum" => $goodsItem['tradenum'],
+                "buyer_name" => $goodsItem['buyer_name'],
+                "buyer_mobile" => $goodsItem['buyer_mobile'],
+                "seller_message" => $goodsItem['seller_message'],
+                //"goods_name" => $goodsItem['goods_name'],
+                "num" => $goodsItem['number'],
+                "merchant_code" => $goodsItem['merchant_code'],
+            );
+            $goodData[$fname][] = array(
+                    $goodsList['order_id'],$goodsList['tradeNum'],$goodsList['buyer_name'],$goodsList['buyer_mobile'],$goodsList['seller_message'],/*$goodsList['goods_name'],*/$goodsList['num'],$goodsList['merchant_code']
+                );
+        }
+        $time = date('Ymd');
+        $url = 'erp/'.$time;
+        $fileName = ExcelService::getInstance()->exportExcel($goodData, $header, 'erp/'.$time);
+        if ($fileName) {
+            return $time.'/'.$fileName;
+        } else {
+            $success = false;
+            $data = "";
+            $message = "excel生成失败";
+        }
+        return array($success, $data, $message);
+    }
+
+    /*
+     *生成内部订单号
+     *@describe 日期+字母+3位数
+     */
+    function get_trade_no(){
+        $model = ShopordersDao::getInstance($warCode);
+        $now = time ();
+        $expireAt = $now + 10 * 60;
+        $created_day = date ( 'Ymd', $now );    
+        $last_id = $model->get_last($created_day);
+        if (! $last_id) {
+          return false;
+        }
+        return $this->generateTradeNo($now , $last_id);
+    }
+    /*
+     *@describe 订单号
+     *@param $now 当前时间
+     *@param $trade_day_id 当天交易量总额数
+     *@author  zk
+      */    
+    function generateTradeNo($now, $trade_day_id) {
+        return date ( 'Ymd', $now ) . 'a' . str_replace ( " ", "", sprintf ( "%04d", $trade_day_id ) );
+    }
+
+}
+
+
+

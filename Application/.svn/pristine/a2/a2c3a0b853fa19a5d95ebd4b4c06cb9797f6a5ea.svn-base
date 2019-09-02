@@ -1,0 +1,105 @@
+<?php
+define('IS_MASTER', true);
+define('APP_DIR', '/home/dev/venus/');
+//define('APP_DIR', '/home/wms/app/');//正式站目录为/home/wms/app/
+define('APP_DEBUG', true);
+define('APP_MODE', 'cli');
+define('APP_PATH', APP_DIR . './Application/');
+define('RUNTIME_PATH', APP_DIR . './Runtime_script/'); // 系统运行时目录
+require APP_DIR . './ThinkPHP/ThinkPHP.php';
+
+use Common\Service\ExcelService;
+use Common\Service\PassportService;
+use Erp\Dao\ShopordersDao;
+use Erp\Dao\ShoporderdetailDao;
+use Erp\Service\PrizeService;
+
+
+//查询所有导入的订单，状态为1的订单【订单详情导入后将订单表状态改为1】
+$order = ShopordersDao::getInstance();
+$detail = ShoporderdetailDao::getInstance();
+$status = 1;
+$data = $order->queryBystatus($status);
+if(empty($data)){
+    return array(false, '', '还没有要拆分的订单哦');
+}
+//循环查询每笔订单的信息，并进行拆分
+foreach($data as $v){
+    $message = $v['seller_message'];
+    $message = explode(',', $message);
+    $orderData['tradenum'] = $v['tradenum'];
+    $orderData['logistics_status'] = 1;
+    if(in_array('1', $message)){
+        $orderData['order_id'] = $v['order_id'].'-a';
+        $orderData['seller_message'] = '包装用防水袋';
+        $orderData['merchant'] = '0.5KG米砖';
+        $result = $detail->insideAdd($orderData);
+    }elseif(in_array('2', $message)){
+        $orderData['order_id'] = $v['order_id'].'-a';
+        $orderData['seller_message'] = '包装用防水袋';
+        $orderData['merchant'] = '食盐一袋';
+        $result = $detail->insideAdd($orderData);
+    }else{
+        //计算赠品的质量
+        $gift_weight = '';
+        $goods_weight = '';
+        for($i=0;$i<count($message);$i++){
+            $number = $message[$i];
+            $content = C('GIFT_RULE'.$number);
+            if($content['type'] == 200){
+                $merchant = $content['merchant'];
+                //查询sku重量
+                $skuData = $detail->queryBySku($merchant);
+                $gift_weight += $skuData['sku_weight'];
+            }
+        }
+        //查询订单详情计算订单商品总重量
+        $goodsData = $detail->orderDetail($v['tradenum']);
+        for($i=0;$i<count($goodsData);$i++){
+            $skuData = $detail->queryBySku($goodsData['merchant_code']);
+            $goods_weight += $skuData['sku_weight']*$goodsData['number'];
+        }
+        $weights = $gift_weight + $goods_weight;
+        if($weights <= 2){
+            $orderData['type'] = 1;
+            $orderData['goods_weight'] = $weights;
+            $orderData['order_id'] = $res['order_id'].'-'.a;
+            $result = $detail->insideAdd($orderData);
+        }elseif($weights < 4){
+            $orderData['type'] = 2;
+            $orderData['goods_weight'] = $weights;
+            $orderData['order_id'] = $res['order_id'].'-'.a;
+            $result = $detail->insideAdd($orderData);
+        }else{
+            $a = $weights / 4;
+            $num = floor($a);
+            $b = $weights % 4;
+            for($i=0;$i<$num;$i++){
+                $orderData['type'] = 2;
+                $orderData['goods_weight'] = 4;
+                $orderData['order_id'] = $res['order_id'].'-'.$this->getLetter($i);
+                if($i == 0){
+                    $orderData['seller_message'] = $message;
+                    $result = $detail->insideAdd($orderData);
+
+                }else{
+                    $orderData['seller_message'] = '';
+                    $result = $detail->insideAdd($orderData);
+                }     
+            }
+            if($b <= 2 && $b >0){
+                $orderData['type'] = 1;
+                $orderData['goods_weight'] = $b;
+                $orderData['order_id'] = $res['order_id'].'-'.$this->getLetter($num);
+                $result = $detail->insideAdd($orderData);
+            }elseif($b < 4){
+                $orderData['type'] = 2;
+                $orderData['goods_weight'] = $b;
+                $orderData['order_id'] = $res['order_id'].'-'.$this->getLetter($num);
+                $result = $detail->insideAdd($orderData);
+            }
+
+        } 
+    }        
+}
+    

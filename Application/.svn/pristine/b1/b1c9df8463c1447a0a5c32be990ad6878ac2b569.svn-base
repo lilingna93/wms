@@ -1,0 +1,39 @@
+<?php
+
+namespace Erp\Service;
+
+use Common\Service\ExcelService;
+use Common\Service\PassportService;
+use Erp\Dao\ShopordersDao;
+
+class GeneralorderService {
+
+    public $waCode;
+
+    function __construct()
+    {
+        /*$workerData = PassportService::getInstance()->loginUser();
+        if(empty($workerData)){
+            venus_throw_exception(110);
+        }*/
+        $this->waCode = $workerData["war_code"];
+    }
+    //插入订单
+    public function order_insert(){
+        $res = M('shoporders')->insert($data);
+        return $res;
+    }
+    //修改订单
+    public function order_update(){
+        
+    }
+    //
+    
+
+
+
+    
+}
+
+
+

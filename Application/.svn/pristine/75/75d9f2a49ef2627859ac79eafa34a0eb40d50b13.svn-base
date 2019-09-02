@@ -1,0 +1,16 @@
+<?php
+return array(
+	'CUSTOMER' => array(
+                  array(
+                    "warName" => '外部项目组一',
+                    "warCode" => "WE100027",
+                  ),    
+                  array(
+                    "warName" => '外部项目组二',
+                    "warCode" => "WE100028",
+                  ), 
+            ),
+
+
+
+);

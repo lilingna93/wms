@@ -1,0 +1,196 @@
+<?php
+/**
+ * Created by PhpStorm.
+ * User: lingn
+ * Date: 2018/8/30
+ * Time: 10:19
+ */
+define('IS_MASTER', true);
+//define('APP_DIR', dirname(__FILE__) . '/../../../');
+define('APP_DIR', '/home/dev/venus/');
+//define('APP_DIR', '/home/wms/app/');//正式站目录为/home/wms/app/
+define('APP_DEBUG', true);
+define('APP_MODE', 'cli');
+define('APP_PATH', APP_DIR . './Application/');
+define('RUNTIME_PATH', APP_DIR . './Runtime_script/'); // 系统运行时目录
+require APP_DIR . './ThinkPHP/ThinkPHP.php';
+
+//在命令行中输入 chcp 65001 回车, 控制台会切换到新的代码页,新页面输出可为中文
+$time = venus_script_begin("开始检测库存");
+
+use Wms\Dao\GoodsDao;
+use Wms\Dao\GoodsbatchDao;
+use Wms\Dao\GoodstoredDao;
+use Wms\Dao\IgoodsentDao;
+use Wms\Dao\IgoodsDao;
+
+$wmsWarCode = "WA000001";
+$goodsModel = GoodsDao::getInstance($wmsWarCode);
+$goodstroedModel = GoodstoredDao::getInstance($wmsWarCode);
+$goodsbatchModel = GoodsbatchDao::getInstance($wmsWarCode);
+$iGoodsModel = IgoodsDao::getInstance($wmsWarCode);
+$iGoodsentModel = IgoodsentDao::getInstance($wmsWarCode);
+$errorGoodsArr = array();
+$goodsDataList = queryGoodsbatchAndGoodstoredToCheckGoods(0, 100000);
+//    var_dump($goodsDataList);exit();
+if (!empty($goodsDataList)) {
+//        echo json_encode($goodsDataList);exit();
+    $goodsDataArr = array();
+
+    foreach ($goodsDataList as $goodsData) {
+        if (ceil(round(bcmod(($goodsData['goods_init'] * 100), ($goodsData['spu_cunit'] * 100)))) > 0 ||
+            ceil(round(bcmod(($goodsData['goods_count'] * 100), ($goodsData['spu_cunit'] * 100)))) > 0 ||
+            ceil(round(bcmod(($goodsData['gb_count'] * 100), ($goodsData['spu_cunit'] * 100)))) > 0 ||
+            ceil(round(bcmod(($goodsData['gs_init'] * 100), ($goodsData['spu_cunit'] * 100)))) > 0 ||
+            ceil(round(bcmod(($goodsData['gs_count'] * 100), ($goodsData['spu_cunit'] * 100)))) > 0) {
+            if (!in_array("numUnit", $errorGoodsArr[$goodsData['spu_code']])&&$goodsData['spu_code']!="SP000557") {
+                $errorGoodsArr[$goodsData['spu_code']][] = "numUnit";
+            }
+        }
+
+        if ($goodsData['gb_count'] != $goodsData['gs_init']) {
+            if (!in_array("goodsbatch_goodstored", $errorGoodsArr[$goodsData['spu_code']])) {
+                $errorGoodsArr[$goodsData['spu_code']][] = "goodsbatch_goodstored";
+            }
+        } else {
+            if ($goodsData['sku_count'] != bcdiv($goodsData['goods_count'], $goodsData['spu_count'], 2)) {
+                if (!in_array("goods", $errorGoodsArr[$goodsData['spu_code']])) {
+                    $errorGoodsArr[$goodsData['spu_code']][] = "goods";
+                }
+            } else {
+                $goodsDataArr[$goodsData['war_code']][$goodsData['spu_code']]['goods_init'] = $goodsData['goods_init'];
+                $goodsDataArr[$goodsData['war_code']][$goodsData['spu_code']]['goods_count'] = $goodsData['goods_count'];
+                $goodsDataArr[$goodsData['war_code']][$goodsData['spu_code']]['gs_goods_init'] = floatval(bcadd($goodsDataArr[$goodsData['war_code']][$goodsData['spu_code']]['gs_goods_init'], $goodsData['gs_init'], 2));
+                $goodsDataArr[$goodsData['war_code']][$goodsData['spu_code']]['gs_goods_count'] = floatval(bcadd($goodsDataArr[$goodsData['war_code']][$goodsData['spu_code']]['gs_goods_count'], $goodsData['gs_count'], 2));
+            }
+        }
+
+    }
+    unset($goodsData);
+    foreach ($goodsDataArr as $warCode => $goodsData) {
+        foreach ($goodsData as $spuCode => $goodsDatum) {
+            $goodsInit = floatval($goodsDatum['goods_init']);
+            $gsGoodsInit = floatval($goodsDatum['gs_goods_init']);
+            $goodsCount = floatval($goodsDatum['goods_count']);
+            $gsGoodsCount = floatval($goodsDatum['gs_goods_count']);
+            if ($goodsInit != $gsGoodsInit || $goodsCount != $gsGoodsCount) {
+                if (!in_array("goods_goodstored", $errorGoodsArr[$spuCode])) {
+                    $errorGoodsArr[$spuCode][] = "goods_goodstored";
+                }
+            }
+
+        }
+    }
+}
+
+unset($goodsDataList);
+unset($goodsDataArr);
+$igoodsDataList = queryGoodstoredAndIgoodsentToCheckGoods(0, 100000);
+//echo json_encode($igoodsDataList);
+//exit();
+if (!empty($igoodsDataList)) {
+    $igoodsDataArr = array();
+    foreach ($igoodsDataList as $igoodsData) {
+        if (ceil(round(($goodsData['igs_count'] * 100) % ($goodsData['spu_cunit'] * 100))) > 0) {
+            if (!in_array("numUnit", $errorGoodsArr[$igoodsData['spu_code']])) {
+                $errorGoodsArr[$igoodsData['spu_code']][] = "numUnit";
+            }
+        }
+        if ($igoodsData['gs_init'] == $igoodsData['gs_count'] + $igoodsData['igs_count']) {
+            $igoodsDataArr[$igoodsData['war_code']][$igoodsData['spu_code']]['goods_init'] = $igoodsData['goods_init'];
+            $igoodsDataArr[$igoodsData['war_code']][$igoodsData['spu_code']]['goods_count'] = $igoodsData['goods_count'];
+            $igoodsDataArr[$igoodsData['war_code']][$igoodsData['spu_code']]['igs_goods_count'] += $igoodsData['igs_count'];
+        } else {
+            if (!in_array("goodstored_igoodsent", $errorGoodsArr[$igoodsData['spu_code']])) {
+                $errorGoodsArr[$igoodsData['spu_code']][] = "goodstored_igoodsent";
+                echo json_encode($igoodsData);
+                exit();
+            }
+        }
+    }
+    unset($igoodsData);
+    foreach ($igoodsDataArr as $warCode => $igoodsData) {
+
+        foreach ($igoodsData as $spuCode => $igoodsDatum) {
+            $goodsInit = floatval($igoodsDatum['goods_init']);
+            $goodsCount = floatval($igoodsDatum['goods_count']);
+            $igsGoodsCount = floatval($igoodsDatum['igs_goods_count']);
+            $goodsInitNew = floatval(bcadd($goodsCount, $igsGoodsCount, 2));
+            if ($goodsInit != $goodsInitNew) {
+                if (!in_array("goods_igoodsent", $errorGoodsArr[$spuCode])) {
+                    $errorGoodsArr[$spuCode][] = "goods_igoodsent";
+                }
+            }
+            unset($goodsInit);
+            unset($goodsCount);
+            unset($igsGoodsCount);
+        }
+    }
+    unset($igoodsDataList);
+}
+//echo json_encode($errorGoodsArr);
+//exit();
+if (!empty($errorGoodsArr)) {
+    $title = "[NOTICE]WMS库存错误货品提醒(测试站)";
+//    $title = "[NOTICE]WMS库存错误货品提醒(正式站)";
+    if (!empty($errorGoodsArr)) {
+        $spuArr = array_keys($errorGoodsArr);
+        if (!empty($spuArr)) {
+            $content = "<div style='border: 1px solid #000000'>以下货品数据有问题：<br>";
+            foreach ($spuArr as $spuCode) {
+                $types = join(",<br>", $errorGoodsArr[$spuCode]);
+                $content .= $spuCode . "发生以下异常:" . "{$types}" . "<br>";
+            }
+            $content .= "</div>";
+            if (sendMailer($title, $content)) {
+                echo "(发送成功)";
+            } else {
+                echo "(发送失败)";
+            }
+        }
+
+    }
+}
+
+
+/*************************************************************************************************************/
+/*检测当日缺货数据并邮件通报*/
+$oosDate = date("Y-m-d", strtotime(" - 1 day"));
+$oosFilePath = C("FILE_SAVE_PATH") . C("FILE_TYPE_NAME.WAREHOUSE_OUT_OF_STOCK") . "/{$oosDate}.log";
+$oosFileData = file_get_contents($oosFilePath);
+if (!empty($oosFileData)) {
+    sendMailer("[NOTICE]昨日缺货提醒_{$oosDate}(测试站)",
+        "<div style = 'border:1px solid #000000;background-color: #cccccc;font-size: 12px'> $oosFileData</div> ");
+}
+/*************************************************************************************************************/
+
+
+venus_script_finish($time);
+exit();
+
+function queryGoodsbatchAndGoodstoredToCheckGoods($page = 0, $count = 100)
+{
+    return M("Goods")->alias('goods')->field('goods.goods_init goods_init,goods.goods_count goods_count,
+        gb.gb_code gb_code,gb.gb_count gb_count,gs.gs_code gs_code,gs.gs_init gs_init,gs.gs_count gs_count,
+        goods.war_code war_code,goods.spu_code spu_code,goods.sku_count,sku.spu_count,spu.spu_cunit')
+        ->join("LEFT JOIN wms_goodsbatch gb ON gb.spu_code = goods.spu_code")
+        ->join("LEFT JOIN wms_goodstored gs ON gs.gb_code = gb.gb_code")
+        ->join("LEFT JOIN wms_sku sku ON goods.sku_code = sku.sku_code")
+        ->join("LEFT JOIN wms_spu spu ON goods.spu_code = spu.spu_code")
+        ->where(array("gb.gb_count" => array("gt", 0)))
+        ->order('goods.id desc')->limit("{$page},{$count}")
+        ->fetchSql(false)->select();
+}
+
+function queryGoodstoredAndIgoodsentToCheckGoods($page = 0, $count = 100)
+{
+    return M("Goods")->alias('goods')->field('goods.goods_init goods_init,goods.goods_count goods_count,
+        goods.war_code war_code,goods.spu_code spu_code,sum(igs.igs_count) igs_count,gs.gs_init,gs.gs_count,spu.spu_cunit')
+        ->join("LEFT JOIN wms_goodstored gs ON gs.spu_code = goods.spu_code")
+        ->join("LEFT JOIN wms_igoodsent igs ON igs.gs_code = gs.gs_code")
+        ->join("LEFT JOIN wms_sku sku ON goods.sku_code = sku.sku_code")
+        ->join("LEFT JOIN wms_spu spu ON goods.spu_code = spu.spu_code")
+        ->where(array("igs.igs_count" => array("gt", 0)))
+        ->order('goods.id desc')->limit("{$page},{$count}")
+        ->Group("gs.gs_code")->fetchSql(false)->select();
+}

@@ -1,0 +1,98 @@
+<?php
+
+namespace Erp\Dao;
+
+use Common\Common\BaseDao;
+use Common\Common\BaseDaoInterface;
+
+/**
+ * 库存数据
+ * Class GoodsDao
+ * @package Wms\Dao
+ */
+class ShoporderdetailDao extends BaseDao implements BaseDaoInterface
+{
+
+
+    /**
+     * GoodsDao constructor.
+     */
+    function __construct()
+    {
+
+    }
+    /**
+     * 添加数据[init,count,spucode]
+     * @param $item $shop 
+     * @return bool
+     */
+    public function insert($item)
+    {
+        $data = array(
+            "order_id"      => $item["order_id"],
+            "tradenum"      => $item["tradenum"],//订单单号
+            "created_at"    => date("Y-m-d H:i:s"),
+            "seller_message"=> $item["seller_message"],
+            "number"        => $item["num"],//商品数量
+            "merchant_code" =>  $item["merchant"],//商品编号
+        );
+        return M("shoporderdetail")->add($data);
+        
+    }
+    //插入拆单数据
+    public function insideAdd($item){
+        
+        $data = array(
+            "order_id" => $item["order_id"],
+            "tradenum" => $item["tradenum"],//订单单号
+            "seller_message"=> $item["seller_message"],
+            "created_at" => date("Y-m-d H:i:s"),//商品数量
+            "merchant_code" =>  $item["merchant"],//商品编号
+        );
+        return M("shopdismantleorder")->add($data); 
+    }
+    //查询所有要打印的订单
+    public function goodsList($ids){
+        $condition['a.id'] = array('in', $ids);
+        /*$data = M('shopdismantleorder')->alias('b')
+                               ->field("a.order_id, a.tradenum, a.buyer_name, a.buyer_mobile, a.seller_message, a.goods_name, b.number, b.merchant_code")
+                               ->join('wms_shoporders as a on b.tradenum = a.tradenum', "LEFT")
+                               ->where($condition)
+                               ->select();*/
+        $data = M('shopdismantleorder')->alias('a')
+                           ->field("a.order_id, a.tradenum, b.buyer_name, b.buyer_mobile, a.seller_message, b.goods_name, a.num, a.merchant_code, a.logistics_num")
+                           ->join('wms_shoporders as b on a.tradenum = b.tradenum', "LEFT")
+                           ->where($condition)
+                           ->order('a.id')
+                           ->select();
+        return $data;                       
+    }
+    //导出所有到excel
+    public function goodsLists($condition, $page=0, $size=30){
+        $page2 = $size * $page;
+        $data['list'] = M('shopdismantleorder')->alias('a')
+                           ->field("a.order_id, a.tradenum, b.buyer_name, b.buyer_mobile, a.seller_message, b.goods_name, a.num, a.merchant_code, a.logistics_num, a.order_cost")
+                           ->join('wms_shoporders as b on a.tradenum = b.tradenum', "LEFT")
+                           ->where($condition)
+                           ->order('a.id desc')
+                           ->limit($page2, $size)
+                           ->select();
+        $data['total'] = M('shopdismantleorder')->alias('a')
+                           ->field("a.order_id, a.tradenum, b.buyer_name, b.buyer_mobile, a.seller_message, b.goods_name, a.num, a.merchant_code, a.logistics_num")
+                           ->join('wms_shoporders as b on a.tradenum = b.tradenum', "LEFT")
+                           ->where($condition)
+                           ->count();
+        return $data;                       
+    }
+
+    //
+    public function detailBytradenum($tradenum){
+        $condition['tradenum'] = $tradenum;
+        $data = M('shopdismantleorder')->field("order_id, created_at,num,merchant_code, logistics_num, logistics_status")
+                                       ->where($condition)
+                                       ->select();
+        return $data;                       
+    }
+    
+
+}

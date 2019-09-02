@@ -1,0 +1,42 @@
+<?php
+
+namespace Erp\Dao;
+
+use Common\Common\BaseDao;
+use Common\Common\BaseDaoInterface;
+
+/**
+ * 库存数据
+ * Class GoodsDao
+ * @package Wms\Dao
+ */
+class ShoporderdetailDao extends BaseDao implements BaseDaoInterface
+{
+
+
+    /**
+     * GoodsDao constructor.
+     */
+    function __construct()
+    {
+
+    }
+    /**
+     * 添加数据[init,count,spucode]
+     * @param $item $shop 
+     * @return bool
+     */
+    public function insert($item)
+    {
+        $data = array(
+            "order_id" => $item["order_id"],
+            "tradenum" => $item["tradenum"],//订单单号
+            "number" => $item["num"],//商品数量
+            "merchant_code" =>  $item["merchant"],//商品编号
+        );
+        return M("shoporderdetail")->add($data);
+        
+    }
+    
+
+}

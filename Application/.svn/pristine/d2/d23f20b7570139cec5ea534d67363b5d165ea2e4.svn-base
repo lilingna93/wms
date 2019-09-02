@@ -1,0 +1,47 @@
+const gm = require('gm').subClass({imageMagick: true});
+
+let drawImg = (billCode, code, codeMsg, resolve) => {
+    try {
+        selectType[codeMsg.type](billCode, code, codeMsg, resolve);
+    }
+    catch (err) {
+        console.log({timestamp: new Date().toLocaleString(),msg: "draw图片失败！"});
+        resolve({status: false, msg: 'catch,draw图片失败'});
+    }
+}
+
+let selectType = {
+    'ZTO': (billCode, code, codeMsg, resolve) => {
+        gm('./public/images/ZTO_template.jpg')
+            .font('./public/font/microsoftYaHei_bold.ttf')
+            .fontSize('110')
+            .drawText(300, 260, codeMsg.getmark.mark)
+            .fontSize('68')
+            .drawText(300, 1076, billCode)
+            .draw(`image Over 56, 814 1080, 180 "./public/images/ZTO_barcode/ZTO_barcode${code}.jpg"`)
+            .draw(`image Over 580, 1333 600, 110 "./public/images/ZTO_barcode/ZTO_barcode${code}.jpg"`)
+            .fontSize('42')
+            .drawText(680,1486, billCode)
+            .drawText(140, 490, `${codeMsg._addressee}`)
+            .drawText(140, 590, `${codeMsg._receivAddress}`)
+            .drawText(140, 696, `${codeMsg._sender}`)
+            .drawText(140, 760, `${codeMsg._mailAddress}`)
+            .drawText(140, 1568, `${codeMsg._addressee}`)
+            .drawText(140, 1648, `${codeMsg._receivAddress}`)
+            .drawText(140, 1742, `${codeMsg._sender}`)
+            .drawText(140, 1812, `${codeMsg._mailAddress}`)
+            .write(`./public/images/ZTO_order/ZTO_order${code}.jpg`, function (err) {
+                if (!err) {
+                    resolve({status: true, msg: '生成图片成功'})
+                } else {
+                    console.log(codeMsg.id)
+                    console.log({timestamp: new Date().toLocaleString(),msg:err.message || "draw图片失败！"});
+                    resolve({status: false, msg: 'draw图片失败'})
+                }
+            });
+    }
+}
+
+module.exports = {
+    drawImg
+}

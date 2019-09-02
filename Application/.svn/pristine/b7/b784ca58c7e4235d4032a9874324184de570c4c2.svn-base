@@ -1,0 +1,300 @@
+<?php
+ini_set('memory_limit', '2028M');
+define('APP_DIR', dirname(__FILE__) . '/../../../');
+//define('APP_DIR', '/home/dev/venus/');//测试站运行脚本路径
+define('APP_DEBUG', true);
+define('APP_MODE', 'cli');
+define('APP_PATH', APP_DIR . './Application/');
+define('RUNTIME_PATH', APP_DIR . './Runtime_script/'); // 系统运行时目录
+require APP_DIR . './ThinkPHP/ThinkPHP.php';
+
+use Common\Service\ExcelService;
+use Wms\Dao\ReportdownloadDao;
+
+$time = venus_script_begin("市场部鲜鱼水菜销售数据表(周)");
+
+//周
+$stime = date('Y-m-d 00:00:00', strtotime('-7 days'));//上周周一
+$etime = date('Y-m-d 00:00:00', time());//本周的周一
+
+$type = "116";
+$clause = array(
+    'wstatus' => 3,
+    'sctime' => $stime,
+    'ectime' => $etime,
+    'oiexternal' => 1,//是否是内部订单1.内部 2.外部
+//    'spuType' => array("EQ", $type),
+);
+$orderData = queryListToOrdergoodsByTime($clause);//获取所有订单信息
+
+/*$totalSprice 内部销售金额
+ * $totalTprice 订单总金额
+ * $totalCprofit 订单客户总利润额
+ * */
+$orderDataArr = array();
+$orderDataSummary = array();
+foreach ($orderData as $orderKey => $orderDatum) {
+    $orderTprice = $orderDatum['order_tprice'];//订单总金额
+    $warname = $orderDatum["war_name"];//仓库名称
+    $username = $warname . "|" . explode("[", $orderDatum["user_name"])[0];
+    $time = date("Y-m-d", strtotime($orderDatum['order_ctime']));
+    $oCode = $orderDatum['order_code'];
+    $goodsData = array();
+    $skCount = $orderDatum['sku_count'];
+    $skBprice = bcmul($orderDatum['spu_bprice'], $orderDatum['spu_count'], 4);
+    $totalSprice = bcmul($skBprice, $orderDatum['sku_count'], 4);//内部销售金额
+    $totalTprice = venus_calculate_sku_price_by_spu($orderDatum['spu_sprice'], $orderDatum['goods_count'], $orderDatum['profit_price']);//订单总金额
+    $totalCprofit = bcmul($orderDatum['profit_price'], $orderDatum['goods_count'], 4);//订单客户总利润额
+    $grossProfit = bcsub($totalTprice, $totalSprice, 4);//毛利
+    $orderDataSummary['totalSales'] += $skCount;//总销量
+    $orderDataSummary['totalSprice'] += $totalSprice;
+    $orderDataSummary['totalTprice'] += $totalTprice;
+//    $orderDataSummary['totalCprofit'] += $totalCprofit;
+    $orderDataSummary['grossProfit'] += $grossProfit;//毛利
+
+    $orderDataSummary[$warname]['totalSales'] += $skCount;
+    $orderDataSummary[$warname]['totalSprice'] += $totalSprice;
+    $orderDataSummary[$warname]['totalTprice'] += $totalTprice;
+//    $orderDataSummary[$warname]['totalCprofit'] += $totalCprofit;
+    $orderDataSummary[$warname]['grossProfit'] += $grossProfit;
+    if (!array_key_exists($orderDatum['sku_code'], $orderDataSummary[$warname])) {
+        $goodsData = array(
+            "order_code" => $orderDatum['order_code'],
+            "sku_code" => $orderDatum['sku_code'],
+            "spu_code" => $orderDatum['spu_code'],
+            "spu_name" => $orderDatum['spu_name'],
+            "sup_name" => $orderDatum['sup_name'],
+            'spu_storetype' => venus_spu_storage_desc($orderDatum['spu_storetype']),
+            'spu_type' => venus_spu_type_name($orderDatum['spu_type']),
+            'spu_subtype' => venus_spu_catalog_name($orderDatum['spu_subtype']),
+            'spu_brand' => $orderDatum['spu_brand'],
+            'sku_unit' => $orderDatum['sku_unit'],
+            'sku_norm' => $orderDatum['sku_norm'],
+            'sku_count' => $orderDatum['sku_count'],
+            'spu_bprice' => $orderDatum['spu_bprice'],
+            'spu_sprice' => $orderDatum['spu_sprice'],
+            'profit_price' => $orderDatum['profit_price'],
+            'spu_count' => $orderDatum['spu_count'],
+            'totalSprice' => $totalSprice,
+            'totalTprice' => $totalTprice,
+//            'totalCprofit' => $totalCprofit,
+        );
+        $orderDataSummary[$warname][$orderDatum['sku_code']] = $goodsData;
+    } else {
+        $orderDataSummary[$warname][$orderDatum['sku_code']]['sku_count'] += $orderDatum['sku_count'];
+        $orderDataSummary[$warname][$orderDatum['sku_code']]['totalSales'] += $skCount;
+        $orderDataSummary[$warname][$orderDatum['sku_code']]['totalSprice'] += $totalSprice;
+        $orderDataSummary[$warname][$orderDatum['sku_code']]['totalTprice'] += $totalTprice;
+//        $orderDataSummary[$warname][$orderDatum['sku_code']]['totalCprofit'] += $totalCprofit;
+        $orderDataSummary[$warname][$orderDatum['sku_code']]['grossProfit'] += $grossProfit;
+    }
+    if (!array_key_exists($orderDatum['sku_code'], $orderDataArr[$warname][$username])) {
+        $goodsData = array(
+            "order_code" => $orderDatum['order_code'],
+            "sku_code" => $orderDatum['sku_code'],
+            "spu_code" => $orderDatum['spu_code'],
+            "spu_name" => $orderDatum['spu_name'],
+            "sup_name" => $orderDatum['sup_name'],
+            'spu_storetype' => venus_spu_storage_desc($orderDatum['spu_storetype']),
+            'spu_type' => venus_spu_type_name($orderDatum['spu_type']),
+            'spu_subtype' => venus_spu_catalog_name($orderDatum['spu_subtype']),
+            'spu_brand' => $orderDatum['spu_brand'],
+            'sku_unit' => $orderDatum['sku_unit'],
+            'sku_norm' => $orderDatum['sku_norm'],
+            'sku_count' => $orderDatum['sku_count'],
+            'spu_bprice' => $orderDatum['spu_bprice'],
+            'spu_sprice' => $orderDatum['spu_sprice'],
+            'profit_price' => $orderDatum['profit_price'],
+            'spu_count' => $orderDatum['spu_count'],
+            'totalSprice' => $totalSprice,
+            'totalTprice' => $totalTprice,
+//            'totalCprofit' => $totalCprofit,
+        );
+        $orderDataArr[$warname][$username][$orderDatum['sku_code']] = $goodsData;
+    } else {
+        $orderDataArr[$warname][$username][$orderDatum['sku_code']]['sku_count'] += $orderDatum['sku_count'];
+        $orderDataArr[$warname][$username][$orderDatum['sku_code']]['totalSales'] += $skCount;
+        $orderDataArr[$warname][$username][$orderDatum['sku_code']]['totalSprice'] += $totalSprice;
+        $orderDataArr[$warname][$username][$orderDatum['sku_code']]['totalTprice'] += $totalTprice;
+//        $orderDataArr[$warname][$username][$orderDatum['sku_code']]['totalCprofit'] += $totalCprofit;
+        $orderDataArr[$warname][$username][$orderDatum['sku_code']]['grossProfit'] += $grossProfit;
+    }
+    $orderDataArr[$warname][$username]['totalSales'] += $skCount;
+    $orderDataArr[$warname][$username]['totalSprice'] += $totalSprice;
+    $orderDataArr[$warname][$username]['totalTprice'] += $totalTprice;
+//    $orderDataArr[$warname][$username]['totalCprofit'] += $totalCprofit;
+    $orderDataArr[$warname][$username]['grossProfit'] += $grossProfit;
+}
+
+$OrderExport = array();
+unset($orderDataSummary['totalSales']);
+unset($orderDataSummary['totalSprice']);
+unset($orderDataSummary['totalTprice']);
+//unset($orderDataSummary['totalCprofit']);
+unset($orderDataSummary['grossProfit']);
+
+foreach ($orderDataSummary as $warname => $orderData) {
+    if ($warname != "totalTprice" || $warname != "totalSprice") {
+        $OrderExport["订单汇总"][] = array('项目名称', 'sku编号', 'sku名称', 'sku规格', 'sku计量单位', '销售量', '销售单价', '销售总额');
+        $totalSalesWarSum = $orderData['totalSales'];//总销售量
+        $totalSpriceWarSum = $orderData['totalSprice'];//总采购成本
+        $totalTpriceWarSum = $orderData['totalTprice'];//总销售额
+        $totalGProfitWarSum = $orderData['grossProfit'];//总毛利
+//        $totalCprofitWarSum = $orderData['totalCprofit'];
+        unset($orderData['totalSales']);
+        unset($orderData['totalSprice']);
+        unset($orderData['totalTprice']);
+        unset($orderData['grossProfit']);
+//        unset($orderData['totalCprofit']);
+//        foreach ($orderData as $time => $orderDatum) {
+//            foreach ($orderDatum as $ocode => $goodsData) {
+        foreach ($orderData as $skucode => $goodsDatum) {
+            //周
+            $sprice = $goodsDatum['spu_sprice'];
+            $count = $goodsDatum['spu_count'];
+            $profit = $goodsDatum['profit_price'];
+            $skSprice = venus_calculate_sku_price_by_spu($sprice,$count,$profit);
+            $skSprice = ($skSprice==intval($skSprice))?intval($skSprice):round($skSprice,2);//销售单价（周）
+            $weekTotalSprice = bcmul($skSprice,$goodsDatum['sku_count'], 2);//周销售总价
+            //月
+//            $totalSprice = $goodsDatum['totalTprice'];//销售总价
+//            $averageSkSprice = bcdiv($totalSprice, $goodsDatum['sku_count'], 2);//月平均销售单价(月)
+
+//          $grossProfit = bcsub($goodsDatum['totalSprice'], $finalSkBprice, 4);//毛利
+//          $grossProfitMargin = bcdiv($grossProfit, $goodsDatum['totalSprice'], 4);//毛利率
+//          $cpgpr = bcdiv($goodsDatum['totalCprofit'], $grossProfit, 4);//客户利润占毛利比
+            $OrderExport["订单汇总"][] = array($warname, $goodsDatum['sku_code'], $goodsDatum['spu_name'], $goodsDatum['sku_norm'], $goodsDatum['sku_unit'], $goodsDatum['sku_count'], $skSprice, $weekTotalSprice);
+        }
+//            }
+//        }
+//        $OrderExport["订单汇总"][] = array('统计', '', '', '', '', $totalSalesWarSum, $totalTpriceWarSum, $totalSpriceWarSum);
+        $OrderExport["订单汇总"][] = array('', '', '', '', '', '', '', '');
+    }
+}
+
+$fileName = ExcelService::getInstance()->exportExcel($OrderExport, '', "001");
+
+if ($fileName) {
+
+    $stime = date('Y.m.d', strtotime('-7 days'));//上周周一
+    $etime = date('Y.m.d', strtotime('-1 days'));//当前时间的前一天
+
+    $item = array(
+        "fname" => '市场部鲜鱼水菜销售数据表周报('.$stime.'-'.$etime.')',
+        "sfname" => $fileName,
+        "scatalogue" => '001',//文件存放目录
+        "sdepartments" => '2',//所属部门：1.采购部 2.市场部 3.仓配部 4.财务部 5.品控部
+    );
+    $insertFileslog = ReportdownloadDao::getInstance()->insert($item);
+    if($insertFileslog){
+        echo "写入成功";
+    }else{
+        echo "写入失败";
+    }
+} else {
+    echo "生成文件失败";
+    exit;
+}
+
+//自动发送邮件
+/*if ($fileName) {
+    $title = "市场部鲜鱼水菜销售数据表(周)";
+    $content = "市场部鲜鱼水菜销售数据表(周)";
+    $address = array("wenlong.yang@shijijiaming.com","xiaolong.hu@shijijiaming.com");
+    $attachment = array(
+        "市场部鲜鱼水菜销售数据表(周).xlsx" => C("FILE_SAVE_PATH")."001/".$fileName,
+    );
+
+    if (sendMailer($title, $content, $address, $attachment)) {
+        echo "(发送成功)";
+    } else {
+        echo "(发送失败)";
+    }
+} else {
+    $success = false;
+    $data = "";
+    $message = "下载失败";
+}*/
+
+
+function queryListToOrdergoodsByTime($condition)
+{
+    $condition = conditionFilter($condition);
+    $dbName = C("WMS_CLIENT_DBNAME");
+    return M("Order")->alias('o')->field('*,goods.spu_count,goods.spu_bprice,goods.spu_sprice,goods.profit_price')
+        ->join("LEFT JOIN wms_ordergoods goods ON goods.order_code = o.order_code")
+        ->join("LEFT JOIN $dbName.wms_warehouse war ON war.war_code = o.war_code")
+        ->join("LEFT JOIN wms_sku sku ON sku.sku_code = goods.sku_code")
+        ->join("LEFT JOIN wms_spu spu ON spu.spu_code = goods.spu_code")
+        ->join("LEFT JOIN wms_supplier sup ON sup.sup_code = spu.sup_code")
+        ->join("LEFT JOIN wms_user user ON user.user_code = o.user_code")
+        ->where($condition)->order('goods.spu_code asc')->fetchSql(false)->select();
+}
+
+function conditionFilter($cond)
+{
+    $condition = array();
+    if (isset($cond["ucode"]) && !empty($cond["ucode"])) {
+        $condition["user_code"] = $cond["ucode"];
+    }
+    if (isset($cond["warcode"]) && !empty($cond["warcode"])) {
+        $condition["o.war_code"] = $cond["warcode"];
+    }
+    if (isset($cond["pdate"]) && !empty($cond["pdate"])) {
+        $condition["order_pdate"] = $cond["pdate"];
+    }
+    if (isset($cond["ctime"]) && !empty($cond["ctime"])) {
+        $condition["order_ctime"] = $cond["ctime"];
+    }
+
+    if (isset($cond["sctime"]) && isset($cond["ectime"])) {
+        $condition["order_ctime"] = array(
+            array('EGT', $cond["sctime"]),
+            array('ELT', $cond["ectime"]),
+            'AND'
+        );
+    } else if (isset($cond["sctime"])) {
+        $condition["order_ctime"] = array("EGT", $cond["sctime"]);
+    } else if (isset($cond["ectime"])) {
+        $condition["order_ctime"] = array("ELT", $cond["ectime"]);
+    }
+
+    if (isset($cond["status"]) && !empty($cond["status"])) {
+        $condition["order_status"] = $cond["status"];
+    }
+
+    if (isset($cond["wstatus"]) && !empty($cond["wstatus"])) {
+        $condition["w_order_status"] = $cond["wstatus"];
+    }
+    if (isset($cond["otcode"]) && !empty($cond["otcode"])) {
+        $condition["ot_code"] = $cond["otcode"];
+    }
+    if (isset($cond["spuType"]) && !empty($cond["spuType"])) {
+        $condition["spu_type"] = $cond["spuType"];
+    }
+    if (isset($cond["oCode"]) && !empty($cond["oCode"])) {
+        $condition["o.order_code"] = $cond["oCode"];
+    }
+    if (isset($cond["oCodes"]) && !empty($cond["oCodes"])) {
+        $condition["o.order_code"] = array("in", $cond["oCodes"]);
+    }
+    if (isset($cond["isfsorder"]) && !empty($cond["isfsorder"])) {
+        $condition["o.is_finalsalesorder"] = $cond["isfsorder"];
+    }
+    if (isset($cond["isdownload"]) && !empty($cond["isdownload"])) {
+        $condition["o.is_download"] = $cond["isdownload"];
+    }
+    if (isset($cond["oiexternal"]) && !empty($cond["oiexternal"])) {
+        $condition["order_is_external"] = $cond["oiexternal"];
+    }
+    return $condition;
+}
+
+venus_script_finish($time);
+exit();
+
+
+
+
+
+

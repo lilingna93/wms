@@ -1,0 +1,477 @@
+<?php
+/**
+ * Created by PhpStorm.
+ * User: lingn
+ * Date: 2019/5/30
+ * Time: 10:34
+ */
+
+namespace Erp\Service;
+
+
+use Common\Service\ExcelService;
+use Common\Service\PassportService;
+use Erp\Dao\ReceiptDao;
+use Erp\Dao\SkuDao;
+use Erp\Dao\SpuDao;
+
+class ReceiptService
+{
+    private $SPU_TYPE = array("1" => "商品", "2" => "外包装箱", "3" => "内包装纸袋", "4" => "赠品");
+
+    public function __construct()
+    {
+        $workerData = PassportService::getInstance()->loginUser();
+
+        if (empty($workerData)) {
+            venus_throw_exception(110);
+        }
+        $this->warCode = $workerData["war_code"];// = 'WA000001';//'WA000001';//
+//        $this->worCode = $workerData["wor_code"] = 'WO40428134019222';//'客服';
+        $this->worCode = $workerData["wor_code"];// = 'WO40428134034434';//'仓库';
+        /*$this->warCode = 'WA000001';
+        //$this->worCode = 'WO40516134830324';//'WO40516134750488';//正式
+        $this->worCode = 'WO40428134019222';//测试'WO40428134019222';//*/
+    }
+
+    /**
+     * @param $param
+     * @return array
+     * 搜索入库单
+     */
+    public function search($param)
+    {
+        $returnData = array();
+
+
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+        $data = $param['data'];
+        $clause = array();
+
+        if (!empty($data['code'])) $clause['spucode'] = $data['code'];
+        if (!empty($data['name'])) $clause['spuname'] = $data['name'];
+        if (!empty($data['type'])) $clause['sputype'] = $data['type'];
+
+        $recModel = ReceiptDao::getInstance();
+        $skuModel = SkuDao::getInstance();
+
+
+        $pageCurrent = $data['pageCurrent'];//当前页数
+        if (empty($pageCurrent)) {
+            $pageCurrent = 0;
+        }
+
+        $totalCount = $skuModel->queryCountByCondition($clause);
+        $pageLimit = pageLimit($totalCount, $pageCurrent);
+        $skuDataList = $skuModel->queryListByCondition($clause, $pageLimit['page'], $pageLimit['pSize']);
+
+        $returnData = array(
+            "pageCurrent" => $pageCurrent,
+            "pageSize" => $pageLimit['pageSize'],
+            "totalCount" => $totalCount,
+        );
+        if ($this->worCode == C("LOING_INFO.1")) {
+            $returnData['isCreate'] = true;
+        } elseif ($this->worCode == C("LOING_INFO.2")) {
+            $returnData['isCreate'] = false;
+        } else {
+            return array(false, array(), "非erp用户");
+        }
+        $codeArr = array();
+        $goodsData = array();
+        foreach ($skuDataList as $skuData) {
+            if ($skuData['spu_type'] == 1) {
+                $code = $skuData['spu_code'];
+                $name = $skuData['spu_name'];
+            } else {
+                $code = $skuData['sku_code'];
+                $name = $skuData['sku_name'];
+            }
+            $codeArr[] = $code;
+            $goodsData[$code] = array(
+                "name" => $name,
+                "type" => $skuData['spu_type'],
+                "unit" => $skuData['spu_unit'],
+            );
+        }
+        $codeArr = array_unique($codeArr);
+
+        if (empty($codeArr)) return array(true, $returnData, "");
+        $clauseRec = array(
+            "goodsCode" => array("in", $codeArr)
+        );
+        $recDataList = $recModel->queryListByCondition($clauseRec, 0, 100);
+
+
+        foreach ($recDataList as $recData) {
+            $date = $recData['rec_ctime'];//日期
+            $code = $recData['goods_code'];//编号
+            $name = $goodsData[$code]['name'];//名称
+            $type = $goodsData[$code]['type'];//分类
+            $unit = $goodsData[$code]['unit'];//计量单位
+            $outer = $goodsData[$code]['outer'];//外包装
+            $inner = $goodsData[$code]['inner'];//内包装
+            $init = $recData['goods_init'];//计划数量
+            $count = $recData['goods_count'];//实收数量
+            $surplus = $recData['goods_surplus'];//实收后库存
+            $bprice = $recData['goods_bprice'];//采购单价
+            if ($returnData['isCreate'] == true) {
+                $isInput = false;
+            } else {
+                if (empty($count) || $count == 0) {
+                    $isInput = true;
+                } else {
+                    $isInput = false;
+                }
+            }
+
+
+            $returnData['list'][] = array(
+                "date" => $date,
+                "reccode" => $recData['rec_code'],
+                "code" => $code,
+                "name" => $name,
+                "type" => $type,//type(分类：1商品；2外包装箱；3内包装纸袋；4赠品),
+                "typeMsg" => $this->SPU_TYPE[$type],//type(分类：1商品；2外包装箱；3内包装纸袋；4赠品),
+                "unit" => $unit,
+                "outer" => $outer,
+                "inner" => $inner,
+                "init" => $init,
+                "count" => $count,
+                "surplus" => $surplus,
+                "bprice" => $bprice,
+                "isInput" => $isInput,
+            );
+        }
+
+        return array(true, $returnData, "");
+    }
+
+    /**
+     * @param $param
+     * @return array
+     * 创建入库单
+     */
+    public function create_receipt($param)
+    {
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+        $data = $param['data'];
+
+        if ($this->worCode == C("LOING_INFO.1")) {
+            $role = 1;
+        } elseif ($this->worCode == C("LOING_INFO.2")) {
+            $role = 2;
+        } else {
+            return array(false, array(), "非erp用户");
+        }
+
+        if ($role != 1) return array(false, array(), "非客服不可创建入库单");
+
+        if (empty($data['code'])) return array(false, array(), "货品编号不能为空");
+        if (empty($data['init'])) return array(false, array(), "购买数量不能为空");
+        if (empty($data['bprice'])) return array(false, array(), "货品采购价不能为空");
+
+        $code = $data['code'];
+        $init = $data['init'];
+        $bprice = $data['bprice'];
+
+
+        $createRecData = array(
+            "code" => $code,
+            "bprice" => $bprice,
+            "init" => $init,
+        );
+        $createRecRes = ReceiptDao::getInstance()->insert($createRecData);
+        if (!$createRecRes) {
+            return array(false, array(), "创建入库单失败");
+        } else {
+            return array(true, array(), "创建入库单成功");
+        }
+    }
+
+    /**
+     * @return array
+     * 获取创建入库单时的货品列表
+     */
+    public function search_goods()
+    {
+        $clauseSpu = array(
+            "type" => "1"
+        );
+        $spuModel = SpuDao::getInstance();
+        $skuModel = SkuDao::getInstance();
+
+        $spuDataList = $spuModel->queryListByCondition($clauseSpu, 0, 100);
+
+        $clauseSku = array(
+            "sputype" => array("neq", "1"),
+        );
+        $skuDataList = $skuModel->queryListByCondition($clauseSku, 0, 100);
+
+        $data = array();
+        foreach ($spuDataList as $spuData) {
+            $data['list'][] = array(
+                "code" => $spuData['spu_code'],
+                "name" => $spuData['spu_name'] . "(" . $spuData['spu_unit'] . ")",
+            );
+        }
+
+        foreach ($skuDataList as $skuData) {
+            $data['list'][] = array(
+                "code" => $skuData['sku_code'],
+                "name" => $skuData['sku_name'] . "(" . $skuData['sku_norm'] . ")",
+            );
+        }
+        return array(true, $data, "");
+    }
+
+
+    /**
+     * @param $param
+     * @return array
+     * 填写实收数量
+     */
+    public function update_goods_count($param)
+    {
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+        $data = $param['data'];
+
+        if ($this->worCode == C("LOING_INFO.1")) {
+            $role = 1;
+        } elseif ($this->worCode == C("LOING_INFO.2")) {
+            $role = 2;
+        } else {
+            return array(false, array(), "非erp用户");
+        }
+
+        if ($role != 2) return array(false, array(), "非仓库不可创建入库单");
+
+        if (empty($data['reccode'])) return array(false, array(), "入仓批次编号不能为空");
+        if (empty($data['count'])) return array(false, array(), "实收数量不能为空");
+
+        $recCode = $data['reccode'];
+        $count = $data['count'];
+
+
+        $recModel = ReceiptDao::getInstance();
+        venus_db_starttrans();
+        $isSuccess = true;
+        $isSuccess = $isSuccess && $recModel->updateGoodsCountByRecCode($recCode, $count);
+        $isSuccess = $isSuccess && $recModel->updateGoodsSurplusByRecCode($recCode, $count);
+
+        if (!$isSuccess) {
+            venus_db_rollback();
+            return array(false, array(), "填写实收数量失败，请重新提交");
+        } else {
+            venus_db_commit();
+            return array(true, array(), "填写实收数量成功");
+        }
+
+    }
+
+    /**
+     * @param $param
+     * @return array
+     * 导出入库批次列表
+     */
+    public function export($param)
+    {
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+        $data = $param['data'];
+        $recModel = ReceiptDao::getInstance();
+        $spuModel = SpuDao::getInstance();
+        $skuModel = SkuDao::getInstance();
+
+        if (empty($data['reccodes'])) return array(false, array(), "请选择所要下载的入库单");
+        $reccodes = $data['reccodes'];
+
+        $count = $recModel->queryCountByCondition(array("code" => array("in", $reccodes)));
+        if ($count == 0) return array(false, array(), "请确认所要下载的入库单是否存在");
+        $recDataList = $recModel->queryListByCondition(array("code" => array("in", $reccodes)), 0, $count);
+
+        $excelData = array();
+        $excelData['入库批次清单'][] = array(
+            "日期",
+            "入库单编号",
+            "货品编号",
+            "名称",
+            "分类",
+            "计量单位",
+            "计划数量",
+            "实收数量",
+            "实收后库存",
+            "采购单价",
+
+        );
+        foreach ($recDataList as $recData) {
+            $code = $recData['goods_code'];//编号
+            if (substr($code, 0, 3) == "ESP") {
+                $goodsData = $spuModel->queryByCode($code);
+                $name = $goodsData['spu_name'];//名称
+            } else {
+                $goodsData = $skuModel->queryByCode($code);
+                $name = $goodsData['sku_name'];//名称
+            }
+            $type = $goodsData['spu_type'];//分类
+            $unit = $goodsData['spu_unit'];//计量单位
+            $date = $recData['rec_ctime'];//日期
+            $init = $recData['goods_init'];//计划数量
+            $count = $recData['goods_count'];//实收数量
+            $surplus = $recData['goods_surplus'];//实收后库存
+            $bprice = $recData['goods_bprice'];//采购单价
+            $excelData['入库批次清单'][] = array(
+                $date,
+                $recData['rec_code'],
+                $code,
+                $name,
+                $this->SPU_TYPE[$type],//type(分类：1商品；2外包装箱；3内包装纸袋；4赠品),
+                $unit,
+                $init,
+                $count,
+                $surplus,
+                $bprice,
+            );
+        }
+        $fileName = ExcelService::getInstance()->exportExcel($excelData, "", "001");
+        return array(!empty($fileName), array("fname" => $fileName, "sname" => "入库批次清单.xlsx", "tname" => "001"), empty($fileName) ? "导出失败" : '');
+    }
+
+    /**
+     * @param $orderCode内部订单编号
+     * @param $skuCodeArr商品数组
+     * @return array
+     * 出仓记录
+     */
+    public function sale_goodsbatch($orderCode, $skuCodeArr)
+    {
+//        $orderCode = 'erp20190527a0020';
+        $skuCodeArr = array("ESK00003-1", "ESK00005-2");
+
+        $recModel = ReceiptDao::getInstance();
+        $spuModel = SpuDao::getInstance();
+        $skuModel = SkuDao::getInstance();
+
+        $return = array();
+        $isSuccess = true;
+        $fileData = date("Y-m-d H:i:s", time()) . PHP_EOL . "erp{$orderCode}拆单时发现货品库存不足:" . PHP_EOL;
+        $orderLogsData = date("Y-m-d H:i:s", time()) . PHP_EOL . "erp{$orderCode}订单出仓记录:" . PHP_EOL;
+        $fileDataStr = "";
+        $orderLogsDataStr = "";
+        $codeType = array();
+//        venus_db_starttrans();
+        foreach ($skuCodeArr as $skuCode) {
+            $skuCount = 1;
+            $skuData = $skuModel->queryByCode($skuCode);
+            if (empty($skuData)) return array();
+            $skuNameArr = array();
+            $goodsCodeArr = array();
+            if ($skuData['spu_type'] == 1) {
+                $code = $skuData['spu_code'];
+                $spuCount = $skuData['spu_count'];
+                $skuNameArr[$code]['name'] = $skuData['spu_name'];
+                $skuNameArr[$code]['unit'] = $skuData['spu_unit'];
+                $skuNameArr[$code]['freight'] = $skuData['sku_freight'];
+                $codeType[$code] = "goods";
+            } else {
+                $code = $skuData['sku_code'];
+                $spuCount = 1;
+                $skuNameArr[$code]['name'] = $skuData['sku_name'];
+                $skuNameArr[$code]['unit'] = $skuData['sku_unit'];
+                $skuNameArr[$code]['freight'] = $skuData['sku_freight'];
+                if ($skuData['spu_type'] == 4) $codeType[$code] = "gift";
+                if ($skuData['spu_type'] == 2) $codeType[$code] = "outer";
+                if ($skuData['spu_type'] == 3) $codeType[$code] = "inner";
+            }
+
+            $count = floatval(bcmul($skuCount, $spuCount, 4));
+            $goodsCodeArr[$code] = $count;
+            if (!empty($skuData['sku_inner'])) {
+                $goodsCodeArr[$skuData['sku_inner']] = $skuCount;
+                $skuInnerData = $skuModel->queryByCode($skuData['sku_inner']);
+                $skuNameArr[$skuData['sku_inner']]['name'] = $skuInnerData['sku_name'];
+                $skuNameArr[$skuData['sku_inner']]['unit'] = $skuInnerData['sku_unit'];
+                $codeType[$skuData['sku_inner']] = "inner";
+            }
+            if (!empty($skuData['sku_outer'])) {
+                $goodsCodeArr[$skuData['sku_outer']] = $skuCount;
+                $skuOuterData = $skuModel->queryByCode($skuData['sku_outer']);
+                $skuNameArr[$skuData['sku_outer']]['name'] = $skuOuterData['sku_name'];
+                $skuNameArr[$skuData['sku_outer']]['unit'] = $skuOuterData['sku_unit'];
+                $codeType[$skuData['sku_outer']] = "outer";
+            }
+
+
+            foreach ($goodsCodeArr as $goodsCode => $goodsCount) {
+                $recDataCount = $recModel->queryCountByCondition(array("goodsCode" => $goodsCode, "surplus" => array("GT", 0)));
+                $recDataList = $recModel->queryListAscByCondition(array("goodsCode" => $goodsCode, "surplus" => array("GT", 0)), 0, $recDataCount);
+                $returnGoodsData = array();
+                foreach ($recDataList as $recData) {
+                    $recCode = $recData['rec_code'];
+                    if ($goodsCount == 0) continue;
+                    if ($recData['goods_surplus'] == 0) continue;
+                    if ($recData['goods_surplus'] >= $goodsCount) {
+                        $lessCount = $goodsCount;
+                    } else {
+                        $lessCount = $recData['goods_surplus'];
+                    }
+
+                    $surplusCount = floatval(bcsub($recData['goods_surplus'], $lessCount, 2));
+                    $isSuccess = $isSuccess && $recModel->updateGoodsSurplusByRecCode($recCode, $surplusCount);
+                    if (substr($goodsCode, 0, 3) == "ESP") {
+                        $returnGoodsData = array(
+                            "code" => $goodsCode,
+                            "reccode" => $recCode,
+                            "bprice" => floatval(bcmul($recData['goods_bprice'], $spuCount, 4)),
+                            "count" => floatval(bcdiv($lessCount, $spuCount, 4)),
+                            "name" => $skuNameArr[$goodsCode]['name'],
+                            "freight" => $skuNameArr[$goodsCode]['freight'],
+                        );
+                    } else {
+                        $returnGoodsData = array(
+                            "code" => $goodsCode,
+                            "reccode" => $recCode,
+                            "bprice" => $recData['goods_bprice'],
+                            "count" => $lessCount,
+                            "name" => $skuNameArr[$goodsCode]['name'],
+                            "freight" => $skuNameArr[$goodsCode]['freight'],
+                        );
+                    }
+                    $orderLogsDataStr .= "  " . $skuNameArr[$goodsCode]['name'] . ":"
+                        . PHP_EOL . "批次:" . $returnGoodsData["reccode"] . PHP_EOL .
+                        "数量:" . $returnGoodsData["count"] . $skuNameArr[$goodsCode]['unit'] . PHP_EOL .
+                        "采购价:" . $returnGoodsData["bprice"] . PHP_EOL . "运费:" . $skuNameArr[$goodsCode]['freight'] . PHP_EOL;
+                    $return[$codeType[$goodsCode]][] = $returnGoodsData;
+                    $goodsCount = bcsub($goodsCount, $lessCount, 2);
+                }
+                if ($goodsCount != 0) {
+                    $fileDataStr .= $skuNameArr[$goodsCode]['name'] .
+                        ",缺少$goodsCount" . $skuNameArr[$goodsCode]['unit'] . PHP_EOL;
+                    $isSuccess = $isSuccess && false;
+                }
+            }
+        }
+
+        if (!empty($fileDataStr) || $fileDataStr != "") {
+            $fileData .= $fileDataStr . "" . PHP_EOL . PHP_EOL;
+            $oosFilePath = C("FILE_SAVE_PATH") . C("FILE_TYPE_NAME.ERP_GOODS_LESS") . "/" . date("Y-m-d", time()) . ".log";
+            file_put_contents($oosFilePath, $fileData, FILE_APPEND);
+            $isSuccess = $isSuccess && false;
+        } else {
+            $orderLogsData .= $orderLogsDataStr . "" . PHP_EOL . PHP_EOL;
+            $oosFilePath = C("FILE_SAVE_PATH") . C("FILE_TYPE_NAME.ERP_INVOICE") . "/" . date("Y-m-d", time()) . ".log";
+            file_put_contents($oosFilePath, $orderLogsData, FILE_APPEND);
+        }
+//        var_dump($isSuccess);
+//        var_dump($return);
+//        exit();
+        return $isSuccess ? $return : array();
+    }
+}

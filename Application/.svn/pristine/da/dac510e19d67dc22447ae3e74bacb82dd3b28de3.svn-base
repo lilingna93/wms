@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>至味团餐系统-登录</title>
+    <style>
+        *{padding:0;margin:0}
+        body{background-color: #ececec;}
+        .wapper{width:300px;height: 400px;border: 1px solid #cccccc;float: right;margin: 80px 80px;box-shadow:0px 10px 60px #DFDFDF;border-radius: 6px;background-color: #FEFEFE  }
+        .title{text-align: center;line-height: 100px;}
+        .infor{width: 240px;line-height:40px;border: 1px solid #DFDFDF;background-color:#FFF;margin: 0 auto;border-radius: 6px;box-shadow:0px 5px 200px #DFDFDF;}
+        .line{height: 40px}
+        .line .tip {width:40px;float: left;text-align: center;font-size: 12px}
+        .line .input{margin-left:40px;line-height: 40px;}
+        .line .input input{height:40px;width: 165px;outline: none;border: 0;line-height: 34px;float: left;text-align: center;font-size: 14px;}
+        .foot {width: 240px;line-height:60px;text-align:right;margin: 0 auto;}
+        .foot button{width: 100px;height: 30px; background-color: #0986f0;color:#fff;outline:none}
+    </style>
+</head>
+<body>
+    <div class="wapper">
+        <div class="title">登录{$config['appname']}</div>
+        <div class="infor">
+            <div class="line">
+                <div class="tip">账户</div>
+                <div class="input">
+                    <input type="text" id="username"/>
+                </div>
+            </div>
+            <div class="line" style="border-top:1px solid #EFEFEF">
+                <div class="tip">密码</div>
+                <div class="input">
+                    <input type="password" id="password"/>
+                </div>
+            </div>
+        </div>
+        <div class="foot">
+            <button id="login">登录</button>
+        </div>
+    </div>
+    <script src="https://lib.baomitu.com/jquery/3.3.1/jquery.min.js"></script>
+<script language="JavaScript">
+    (function(){
+        var key = "WMS_USERNAME";
+        var url = "//{$config['host']}/wms/service/api";
+        function onLoginEvent(event){
+            if(event.type == "keyup" && event.keyCode != 13){
+                return;
+            }
+            var username = $("#username").val();
+            var password = $("#password").val();
+            var params = {
+                service:"venus.wms.auth.login",
+                data:{
+                    name:username,
+                    pwd:password
+                }
+            };
+            $.post(url,params,function(result){
+                console.log(result);
+                if(result.error == 0 && result.success){
+                    document.location = "//{$config['host']}/manage/index";
+                }else{
+                    alert(result.message)
+                }
+            },'json');
+        }
+        function initLoginUI(){
+            var username = window.localStorage.getItem(key);
+            username && $("#username").val(username);
+            $("#login").click(onLoginEvent)
+            $("#password").keyup(onLoginEvent);
+        }
+        $(document).ready(initLoginUI);
+    })();
+</script>
+</body>
+</html>

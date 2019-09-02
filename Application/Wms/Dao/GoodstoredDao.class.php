@@ -1,0 +1,361 @@
+<?php
+
+namespace Wms\Dao;
+
+use Common\Common\BaseDao;
+use Common\Common\BaseDaoInterface;
+
+/**
+ * 货品库存批次
+ * Class GoodstoredDao
+ * @package Wms\Dao
+ */
+class GoodstoredDao extends BaseDao implements BaseDaoInterface
+{
+
+
+    /**
+     * GoodstoredDao constructor.
+     */
+    function __construct()
+    {
+
+    }
+    //添加数据[init,count,bprice,gbcode,poscode,spucode]
+
+    /**
+     * @param $item
+     * @return bool
+     */
+    public function insert($item)
+    {
+        $code = venus_unique_code("GW");
+        $data = array(
+            "gs_code" => $code,
+            "gs_init" => $item["init"],     //初次写入的货品数量，即spu的数量
+            "gs_count" => $item["count"],   //当前货品数量，即spu的实际数量
+            "gb_bprice" => $item["bprice"], //货品的采购价格，即spu的采购价格
+            "sgb_code" => $item["sgbcode"],//所属入仓货品批次验货表编号
+            "gb_code" => $item["gbcode"],   //所属入仓货品批次表激励编号
+            "pos_code" => $item["poscode"], //仓库货位编号
+
+            "spu_code" => $item["spucode"], //spu编号
+
+            "sku_code" => $item["skucode"], //sku编号，货品采购和上架时的规格数据信息
+            "sku_init" => $item["skucount"],//sku采购数量，即按货品采购时规格的采购数量
+            "sku_count" => $item["skucount"],//sku的实际数量
+            "war_code" => $this->warehousecode,//所属仓库
+        );
+        if (isset($item["pDate"])) {
+            $data["production_date"] = $item["pDate"];
+        }
+        return M("Goodstored")->add($data) ? $code : false;
+    }
+
+    //查询
+
+    /**
+     * @param $code
+     * @return mixed
+     */
+    public function queryByCode($code)
+    {
+        $condition = array("gs.war_code" => $this->warehousecode, "gs_code" => $code);
+        return M("Goodstored")->alias('gs')->field('*,spu.spu_code,sku.sku_code')
+            ->join("JOIN wms_spu spu ON spu.spu_code = gs.spu_code")
+            ->join("JOIN wms_sku sku ON sku.sku_code = gs.sku_code")
+            ->where($condition)->order('gs.gs_code desc')->fetchSql(false)->find();
+    }
+    //查询
+
+    /**
+     * @param $cond
+     * @param int $page
+     * @param int $count
+     * @return mixed
+     */
+    public function queryListByCondition($cond, $page = 0, $count = 100)
+    {
+        $condition = $this->conditionFilter($cond);
+        return M("Goodstored")->alias('gs')->field('*,spu.spu_code,sku.sku_code')
+            ->join("JOIN wms_spu spu ON spu.spu_code = gs.spu_code")
+            ->join("JOIN wms_sku sku ON sku.spu_code = gs.spu_code")
+            ->where($condition)->order('gs.gs_code desc')->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+    //总数
+
+    /**
+     * @param $cond
+     * @return mixed
+     */
+    public function queryCountByCondition($cond)
+    {
+        $condition = $this->conditionFilter($cond);
+        return M("Goodstored")->alias('gs')->field('*,spu.spu_code,sku.sku_code')
+            ->join("JOIN wms_spu spu ON spu.spu_code = gs.spu_code")
+            ->join("JOIN wms_sku sku ON sku.spu_code = gs.spu_code")
+            ->where($condition)->order('gs.gs_code desc')->fetchSql(false)->count();
+    }
+
+    //获取仓位编码
+
+    /**
+     * @param $code
+     * @return mixed
+     */
+    public function queryPoscodeByCode($code)
+    {
+        $condition = array("war_code" => $this->warehousecode, "gs_code" => $code);
+        return M("Goodstored")->where($condition)->getField("pos_code");
+    }
+
+    //更新货品数量
+
+    /**
+     * @param $code
+     * @param $count
+     * @return mixed
+     */
+    public function updateByCode($code, $count)
+    {
+        $condition = array("war_code" => $this->warehousecode, "gs_code" => $code);
+        return M("Goodstored")->where($condition)
+            ->save(array("timestamp" => venus_current_datetime(),
+                "gs_count" => $count));
+    }
+
+//    /**
+//     * 入仓单根据货品批次单号，更新数量
+//     * @param $code
+//     * @param $count
+//     * @param $bprice
+//     * @param $count
+//     * @return mixed
+//     */
+//    public function updateByGbCode($code, $count)
+//    {
+//        $condition = array("war_code" => $this->warehousecode, "gb_code" => $code);
+//        return M("Goodstored")->where($condition)
+//            ->save(array("timestamp" => venus_current_datetime(),
+//                "gs_count" => $count));
+//    }
+
+    public function updateInitAndCountByCode($code, $init, $count)
+    {
+        $condition = array("war_code" => $this->warehousecode, "gs_code" => $code);
+        return M("Goodstored")->where($condition)
+            ->save(array("timestamp" => venus_current_datetime(),
+                "gs_count" => $count, "gs_init" => $init));
+    }
+
+    //减少sku数量
+    public function updateSkuCountByCode($code, $count)
+    {
+        $condition = array("war_code" => $this->warehousecode, "gs_code" => $code);
+        return M("Goodstored")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(),
+                "sku_count" => $count));
+    }
+
+    public function updateSkuInitByCode($code, $count)
+    {
+        $condition = array("war_code" => $this->warehousecode, "gs_code" => $code);
+        return M("Goodstored")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(),
+                "sku_init" => $count));
+    }
+
+    //查询
+
+    /**
+     * @param $code
+     * @return mixed
+     */
+    public function queryListBySpuCode($code, $page = 0, $count = 100)
+    {
+        $condition = array("gs.war_code" => $this->warehousecode);
+        return M("Goodstored")->alias('gs')->field('*,spu.spu_code,sku.sku_code,gs.sku_count,gs.production_date')
+            ->join("JOIN wms_goodsbatch gb ON gb.gb_code = gs.gb_code AND gs.spu_code = '{$code}'")
+            ->join("JOIN wms_receipt rec ON rec.rec_code = gb.rec_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = gs.spu_code AND gs.spu_code = '{$code}'")
+            ->join("JOIN wms_sku sku ON sku.sku_code = gb.sku_code")
+            ->where($condition)->order('gs.gs_code asc')->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+
+    public function queryCountBySpuCode($code)
+    {
+        $condition = array("war_code" => $this->warehousecode, "spu_code" => $code);
+        return M("Goodstored")->where($condition)->fetchSql(false)->count();
+    }
+
+
+    public function queryListBySkuCode($code, $page = 0, $count = 100)
+    {
+        $condition = array("gs.war_code" => $this->warehousecode);
+        return M("Goodstored")->alias('gs')->field('*,spu.spu_code,sku.sku_code,gs.sku_count,rec.rec_code,gs.production_date')
+            ->join("JOIN wms_goodsbatch gb ON gb.gb_code = gs.gb_code AND gs.sku_code = '{$code}'")
+            ->join("JOIN wms_receipt rec ON rec.rec_code = gb.rec_code")
+            ->join("JOIN wms_sku sku ON sku.sku_code = gb.sku_code AND gs.sku_code = '{$code}'")
+            ->join("JOIN wms_spu spu ON spu.spu_code = gs.spu_code")
+            ->where($condition)->order('gs.gs_code asc')->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+
+    //查找不是同规格的货品列表
+    public function queryListNotSkuBySpuCode($code, $skuCode, $page = 0, $count = 100)
+    {
+        $condition = array("gs.war_code" => $this->warehousecode, "gs.sku_code" => array("neq", $skuCode));
+        return M("Goodstored")->alias('gs')->field('*,spu.spu_code,sku.sku_code,gs.sku_count,gs.production_date')
+            ->join("JOIN wms_goodsbatch gb ON gb.gb_code = gs.gb_code AND gs.spu_code = '{$code}'")
+            ->join("JOIN wms_receipt rec ON rec.rec_code = gb.rec_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = gs.spu_code AND gs.spu_code = '{$code}'")
+            ->join("JOIN wms_sku sku ON sku.sku_code = gs.sku_code")
+            ->where($condition)->order('gs.gs_code asc')->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+
+    public function queryCountBySkuCode($code)
+    {
+        $condition = array("war_code" => $this->warehousecode, "sku_code" => $code);
+        return M("Goodstored")->where($condition)->fetchSql(false)->count();
+    }
+
+    //退货直采专用
+    public function updateInitAndSkuInitByCode($code, $init, $skcount)
+    {
+        $condition = array("war_code" => $this->warehousecode, "gs_code" => $code);
+        return M("Goodstored")->where($condition)
+            ->save(array("timestamp" => venus_current_datetime(),
+                "gs_init" => $init, "sku_init" => $skcount));
+    }
+
+    public function deleteByCode($code)
+    {
+        $condition = array("war_code" => $this->warehousecode, "gs_code" => $code);
+        return M("Goodstored")->where($condition)->fetchSql(false)
+            ->delete();
+    }
+
+    public function deleteByCodes($code)
+    {
+        $condition = array("war_code" => $this->warehousecode, "gs_code" => array("IN", $code));
+        return M("Goodstored")->where($condition)->fetchSql(false)
+            ->delete();
+    }
+
+    public function queryListByGbCode($code, $page = 0, $count = 100)
+    {
+        $condition = array("gs.war_code" => $this->warehousecode, 'gs.gb_code' => $code);
+        return M("Goodstored")->alias('gs')->field('*,spu.spu_code,sku.sku_code,gs.sku_count,gs.production_date')
+            ->join("JOIN wms_goodsbatch gb ON gb.gb_code = gs.gb_code AND gb.gb_code = '{$code}'")
+            ->join("JOIN wms_receipt rec ON rec.rec_code = gb.rec_code")
+            ->join("JOIN wms_sku sku ON sku.sku_code = gs.sku_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = sku.spu_code")
+            ->where($condition)->order('gs.gs_code asc')->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+
+    public function queryListByPosCode($code, $page = 0, $count = 100)
+    {
+        $condition = array("gs.war_code" => $this->warehousecode, 'gs.pos_code' => $code);
+        return M("Goodstored")->alias('gs')->field('*,spu.spu_code,sku.sku_code,gs.sku_count,gs.production_date')
+            ->join("JOIN wms_goodsbatch gb ON gb.gb_code = gs.gb_code AND gs.pos_code = '{$code}'")
+            ->join("JOIN wms_receipt rec ON rec.rec_code = gb.rec_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = gs.spu_code")
+            ->join("JOIN wms_sku sku ON sku.sku_code = gs.sku_code")
+            ->where($condition)->order('gs.gs_code asc')->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+
+    //修改货架号
+    public function updatePosCodeByCode($code, $pcode)
+    {
+        $condition = array("war_code" => $this->warehousecode, "gs_code" => $code);
+        return M("Goodstored")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(),
+                "pos_code" => $pcode));
+    }
+
+    /**
+     * @param $cond
+     * @return array
+     */
+    private function conditionFilter($cond)
+    {
+        $condition = array("gs.war_code" => $this->warehousecode);
+        if (isset($cond["code"])) {
+            $condition["gs_code"] = $cond["code"];
+        }
+        if (isset($cond["codes"])) {
+            $condition["gs_code"] = array("IN", $cond["codes"]);
+        }
+        if (isset($cond["skucode"])) {
+            $condition["gs.sku_code"] = $cond["skucode"];
+        }
+        if (isset($cond["count"])) {
+            $condition["gs.gs_count"] = $cond["count"];
+        }
+        if (isset($cond["poscode"])) {
+            $condition["pos_code"] = $cond["poscode"];
+        }
+        return $condition;
+    }
+
+    public function queryListByRecCodeAndSkuCode($code, $skuCode, $page = 0, $count = 100)
+    {
+        $condition = array("gs.war_code" => $this->warehousecode, "gs.sku_code" => $skuCode);
+        return M("Goodstored")->alias('gs')->field('*,spu.spu_code,sku.sku_code,gs.sku_count,gs.production_date')
+            ->join("JOIN wms_goodsbatch gb ON gb.gb_code = gs.gb_code AND gb.rec_code = '{$code}'")
+            ->join("JOIN wms_receipt rec ON rec.rec_code = gb.rec_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = gs.spu_code")
+            ->join("JOIN wms_sku sku ON sku.sku_code = gs.sku_code")
+            ->where($condition)->order('gs.gs_code asc')->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+
+    public function updateCountAndSkuCountByCode($code, $count, $skcount)
+    {
+        $condition = array("war_code" => $this->warehousecode, "gs_code" => $code);
+        return M("Goodstored")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(),
+                "sku_count" => $skcount, "gs_count" => $count));
+    }
+
+    //修改直采价格
+    public function updateBpriceByCode($gbcode, $spuCode, $bprice)
+    {
+        $condition = array("war_code" => $this->warehousecode, "gs_code" => $gbcode, "spu_code" => $spuCode);
+        return M("Goodstored")->where($condition)
+            ->save(array("timestamp" => venus_current_datetime(), "gb_bprice" => $bprice));
+    }
+
+    public function queryListByGbCodes($code,$page,$count)
+    {
+        $condition = array("gs.war_code" => $this->warehousecode, 'gs.gb_code' => $code);
+        return M("Goodstored")->alias('gs')->field('*,spu.spu_code,sku.sku_code,gs.sku_count,gs.production_date')
+            ->join("JOIN wms_goodsbatch gb ON gb.gb_code = gs.gb_code")
+            ->join("JOIN wms_receipt rec ON rec.rec_code = gb.rec_code")
+            ->join("JOIN wms_sku sku ON sku.sku_code = gs.sku_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = sku.spu_code")
+            ->where($condition)->order('gs.gs_code asc')->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+
+    //查询库存成本条数
+    public function queryBpriceCountByCondition($cond)
+    {
+        $condition = $this->conditionFilter($cond);
+        return M("Goodstored")->alias('gs')->field('gs.sku_code sku_code,sum(gs.gb_bprice*gs.gs_count) bprice')
+            ->join("JOIN wms_spu spu ON spu.spu_code = gs.spu_code")
+            ->join("JOIN wms_sku sku ON sku.spu_code = gs.spu_code")
+            ->where($condition)
+            ->group('gs.sku_code')
+            ->count();
+
+    }
+
+    //查询库存成本列表
+    public function queryBpriceListByCondition($cond, $page = 0, $count = 100)
+    {
+        $condition = $this->conditionFilter($cond);
+        return M("Goodstored")->alias('gs')->field('gs.sku_code,sum(gs.gb_bprice*gs.gs_count) bprice')
+            ->join("JOIN wms_spu spu ON spu.spu_code = gs.spu_code")
+            ->join("JOIN wms_sku sku ON sku.spu_code = gs.spu_code")
+            ->where($condition)->group('gs.sku_code')->limit("{$page},{$count}")->fetchSql(false)->select();
+
+    }
+}

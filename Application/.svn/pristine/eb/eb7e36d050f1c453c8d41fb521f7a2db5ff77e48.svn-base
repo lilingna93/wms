@@ -1,0 +1,1211 @@
+<?php
+/**
+ * Created by PhpStorm.
+ * User: lilingna
+ * Date: 2018/7/17
+ * Time: 14:13
+ */
+
+namespace Wms\Service;
+
+
+use Common\Service\ExcelService;
+use Common\Service\PassportService;
+use Common\Service\TaskService;
+use Common\Service\TraceService;
+use function Couchbase\basicEncoderV1;
+use http\Exception;
+use Wms\Dao\GoodsbatchDao;
+use Wms\Dao\GoodsDao;
+use Wms\Dao\GoodstoredDao;
+use Wms\Dao\IgoodsDao;
+use Wms\Dao\IgoodsentDao;
+use Wms\Dao\InvoiceDao;
+use Wms\Dao\OrderDao;
+use Wms\Dao\OrdergoodsDao;
+use Wms\Dao\OrdertaskDao;
+use Wms\Dao\PositionDao;
+use Wms\Dao\ReceiptDao;
+use Wms\Dao\SkuDao;
+use Wms\Dao\SpuDao;
+use Wms\Dao\SupplierDao;
+use Wms\Dao\TaskDao;
+use Wms\Dao\TraceDao;
+use Wms\Dao\WorkerDao;
+
+class ReceiptService
+{
+
+    static private $RECEIPT_STATUS_CREATE = "1";//入仓单创建状态
+    static private $RECEIPT_STATUS_INSPECTION = "2";//inspection入仓单验货状态
+    static private $RECEIPT_STATUS_FINISH = "3";//入仓单完成状态
+    static private $RECEIPT_STATUS_CANCEL = "4";//入仓单取消状态
+
+    static private $GOODSBATCH_STATUS_CREATE = "1";//货品批次创建状态
+    static private $GOODSBATCH_STATUS_INSPECTION = "2";//货品批次验货状态
+    static private $GOODSBATCH_STATUS_PUTAWAY = "3";//Putaway货品批次上架状态
+    static private $GOODSBATCH_STATUS_FINISH = "4";//货品批次使用完状态
+
+    static private $TASK_STATUS_CREATE = "1";//工单创建状态
+    static private $TASK_STATUS_UNDERWAY = "2";//underway工单进行中状态
+    static private $TASK_STATUS_FINISH = "3";//工单完成状态
+    static private $TASK_STATUS_CANCEL = "4";//工单取消状态
+
+    static private $TASK_TYPE_RECEIPT = "1";//工单类型:入仓业务-入仓
+    static private $TASK_TYPE_INSPECTION = "2";//工单类型:入仓业务-验货
+    static private $TASK_TYPE_PUTAWAY = "3";//工单类型:入仓业务-上架
+    static private $TASK_TYPE_UPTPOS = "4";//工单类型:仓内业务-补货移区
+    static private $TASK_TYPE_INVPICKORDER = "5";//工单类型:出仓业务-拣货捡单
+    static private $TASK_TYPE_INVINSPECTION = "6";//工单类型:出仓业务-验货出仓
+    static private $TASK_TYPE_INVUNUAUAL = "7";//工单类型:出仓业务-异常
+
+    protected static $STATUS_DICTS = ["无数据", "未处理", "已处理"];
+    protected static $START_TIME = "00:00:00";
+    protected static $END_TIME = "23:59:59";
+    protected static $ORDER_STATUS_HANDLE_CREATE = 1;//待处理
+    protected static $ORDER_STATUS_HANDLE = 2;//处理中
+    protected static $ORDER_STATUS_HANDLE_FINISH = 3;//已处理
+    protected static $ORDER_STATUS_HANDLE_CANCEL = 4;//已取消
+    protected static $ORDERGOODS_STATUS_HANDLE_CREATE = 1;//待处理
+    protected static $ORDERGOODS_STATUS_HANDLE = 2;//处理中
+    protected static $ORDERGOODS_STATUS_HANDLE_FINISH = 3;//已处理
+
+    private $RECEIPT_ALLOW_UPDATE;
+    public $warCode;
+    public $worcode;
+
+    public function __construct()
+    {
+        $workerData = PassportService::getInstance()->loginUser();
+        if (empty($workerData)) {
+            venus_throw_exception(110);
+        }
+
+        $this->warCode = $workerData["war_code"];
+        $this->worcode = $workerData["wor_code"];
+//        $this->warCode = $workerData["war_code"] = "WA000001";
+//        $this->worcode = $workerData["wor_code"] = "WO000001";
+        $this->RECEIPT_ALLOW_UPDATE = array(
+            self::$RECEIPT_STATUS_CREATE,
+            self::$RECEIPT_STATUS_INSPECTION,
+        );
+    }
+
+
+    /**
+     * @return array|bool
+     * 创建入仓单／获取sku
+     */
+    public function receipt_get_sku()
+    {
+        $warCode = $this->warCode;
+        $skuModel = SkuDao::getInstance($warCode);
+
+        if (empty($_POST['data']['sku'])) {
+            $message = "sku";
+            venus_throw_exception(1, $message);
+            return false;
+        } else {
+            $sku = trim($_POST['data']['sku']);
+            $type = substr($sku, 0, 2);
+            $data = array();
+            if ($type == "SK") {
+                $querySkuData = $skuModel->queryByCode($sku);
+                $spuData = array(
+                    "skName" => $querySkuData['spu_name'],
+                    "skCode" => $querySkuData['sku_code'],
+                    "skNorm" => $querySkuData['sku_norm'],
+                    "skUnit" => $querySkuData['sku_unit'],
+                    "spCode" => $querySkuData['spu_code'],
+                    "spCount" => $querySkuData['spu_count'],
+                    "spUnit" => $querySkuData['spu_unit'],
+                    "spCunit" => $querySkuData['spu_cunit'],
+                    'supCode' => $querySkuData['sup_code'],
+                    "mark" => $querySkuData['spu_mark']
+                );
+                $data['list'][] = $spuData;
+            } else {
+                $spName = trim(str_replace("'", "", $sku));
+                if (!empty($spName) && preg_match("/^[a-z]/i", $spName)) {
+                    $cond['abname'] = $spName;
+                }
+                if (!empty($spName) && !preg_match("/^[a-z]/i", $spName)) {//SPU名称
+                    $cond["%name%"] = $spName;
+                }
+                $cond['status'] = 1;
+                $querySkuDataList = $skuModel->queryListByCondition($cond);
+
+                foreach ($querySkuDataList as $key => $value) {
+                    $spuData = array(
+                        "skName" => $value['spu_name'],
+                        "skCode" => $value['sku_code'],
+                        "skNorm" => $value['sku_norm'],
+                        "skUnit" => $value['sku_unit'],
+                        "spCode" => $value['spu_code'],
+                        "spCount" => $value['spu_count'],
+                        "spUnit" => $value['spu_unit'],
+                        "spCunit" => $value['spu_cunit'],
+                        "spMark" => $value['spu_mark'],
+                        'supCode' => $value['sup_code'],
+                        "mark" => $value['spu_mark']
+                    );
+                    $data['list'][] = $spuData;
+                }
+            }
+            $success = true;
+            $message = '';
+            return array($success, $data, $message);
+        }
+    }
+
+
+    /**
+     * @param $param "isFast是否快速入仓;list货品列表;mark订单备注信息"
+     * @return array|bool
+     * 创建入仓单/创建入仓预报单
+     */
+    public function receipt_create($param)
+    {
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+        if (empty($param['data']['type'])) {
+            $type = 1;//1采购入仓,2退货入仓
+        } else {
+            $type = $param['data']['type'];
+        }
+        $isFast = $param['data']['isFast'];;
+        $list = $param['data']['list'];
+        $mark = $param['data']['mark'];
+        $supcode = $param['data']['supcode'];
+
+        $warCode = $this->warCode;
+        $worCode = $this->worcode;
+
+        $data = array();
+        venus_db_starttrans();
+
+        $recModel = ReceiptDao::getInstance($warCode);
+        $goodsModel = GoodsDao::getInstance($warCode);
+        $goodsbatchModel = GoodsbatchDao::getInstance($warCode);
+        $traceService = TraceService::getInstance();
+        $taskService = TaskService::getInstance();
+        $goodstoredModel = GoodstoredDao::getInstance($warCode);
+        $positionModel = PositionDao::getInstance($warCode);
+        $spuModel = SpuDao::getInstance($warCode);
+        $skuModel = SkuDao::getInstance($warCode);
+
+
+        //创建入仓单
+        $traceCode = $traceService->get_trace_code();
+        if (!$traceCode) {
+            venus_db_rollback();
+            $message = '轨迹添加';
+            venus_throw_exception(2, $message);
+            return false;
+        }
+        if (!empty($isFast) && 1 == $isFast) {
+            $recStatus = self::$RECEIPT_STATUS_FINISH;
+        } else {
+            $recStatus = self::$RECEIPT_STATUS_CREATE;
+        }
+        $addRecData = array(
+            "worcode" => $worCode,
+            "tracecode" => $traceCode,
+            "mark" => $mark,
+            "status" => $recStatus,
+            "type" => $type,
+            "supcode" => $supcode,
+        );
+        $recCode = $recModel->insert($addRecData);
+        if (!empty($isFast) && 1 == $isFast) {
+            //免仓内操作
+            //记录轨迹
+            $traceMark = "快速入仓";
+        } else {
+            //创建工单
+            $taskType = self::$TASK_TYPE_INSPECTION;
+            $taskStatus = self::$TASK_STATUS_CREATE;
+            $taskData = array("code" => $recCode);
+            $task = $taskService->task_create($warCode, $taskData, $recCode, $taskType, $taskStatus, $recCode);
+            if (!$task) {
+                venus_db_rollback();
+                $message = '工单';
+                venus_throw_exception(2, $message);
+                return false;
+            }
+            //记录轨迹
+            $traceMark = "创建入仓单";
+
+        }
+        $trace = $traceService->update_trace_data($warCode, $traceCode, $recCode, $traceMark);
+        if (!$trace) {
+            venus_db_rollback();
+            $message = '轨迹记录';
+            venus_throw_exception(2, $message);
+            return false;
+        }
+
+        if (!empty($isFast) && 1 == $isFast) {
+            $posCode = $positionModel->queryByWarCode($warCode)['pos_code'];
+        }
+        //创建入仓单清单
+        foreach ($list as $key => $value) {
+
+            if (empty($value['skCode'])) {
+                venus_throw_exception(1, "sku编号不能为空");
+                return false;
+            }
+            if (!empty($isFast) && 1 == $isFast && empty($value['skCount'])) {
+                venus_throw_exception(1, "sku数量不能为空");
+                return false;
+            }
+
+            if (empty($value['spCode'])) {
+                venus_throw_exception(1, "spu编号不能为空");
+                return false;
+            }
+            if (empty($value['supCode'])) {
+                venus_throw_exception(1, "供应商编号不能为空");
+                return false;
+            }
+            if (empty($value['spBprice'])) {
+                venus_throw_exception(1, "spu价格格式不能为空");
+                return false;
+            }
+            if (empty($value['spCunit'])) {
+                venus_throw_exception(1, "spu最小计量单位不能为空");
+                return false;
+            }
+            if (!preg_match('/^[0-9]+(.[0-9]{1,2})?$/', $value['spBprice'])) {
+                venus_throw_exception(4, "spu价格格式不正确");
+                return false;
+            }
+            if (!preg_match('/^[0-9]+(.[0-9]{1,2})?$/', $value['skCount'])) {
+                venus_throw_exception(4, "sku数量格式不正确");
+                return false;
+            } else {
+                if (!empty($value['spCunit']) && $value['spCunit'] == 1) {
+                    if (floor($value['skCount']) != $value['skCount']) {
+                        venus_throw_exception(4, "sku数量格式不正确" . $value['skCode']);
+                        return false;
+                    }
+                    if (isset($value['skInit']) && !empty($value['skInit'])) {
+                        if (floor($value['skInit']) != $value['skInit']) {
+                            venus_throw_exception(4, "sku采购数量格式不正确" . $value['skCode']);
+                            return false;
+                        }
+                    }
+
+                }
+            }
+            if (!preg_match('/^[0-9]+(.[0-9]{1,2})?$/', $value['count'])) {
+                venus_throw_exception(4, "spu总数量格式不正确");
+                return false;
+            } else {
+                if (!empty($value['spCunit']) && $value['spCunit'] == 1) {
+                    if (floor($value['count']) != $value['count']) {
+                        venus_throw_exception(4, "spu总数量格式不正确");
+                        return false;
+                    }
+                }
+            }
+
+
+            $skuInfo = $skuModel->queryByCode($value['skCode']);
+
+            if (ceil(round(bcmod(($value['skCount'] * 100), ($value['spCunit'] * 100)))) > 0) return array(false, array(), "货品" . $skuInfo['spu_name'] . "数量格式不正确");
+
+//            if ($value['spBprice'] != $skuInfo['spu_bprice']) {
+//                $spuModel->updateBpriceCodeByCode($skuInfo['spu_code'], $value['spBprice']);
+//            }
+            $addData['skucode'] = trim($value['skCode']);
+            if (isset($value['skInit']) && !empty($value['skInit'])) $addData['skuinit'] = $value['skInit'];
+            $addData['skucount'] = $value['skCount'];
+            $addData['spucode'] = $value['spCode'];
+            $addData['count'] = $value['count'];
+            $addData['bprice'] = $value['spBprice'];
+            $addData['bprice'] = $value['spBprice'];
+            $addData['supcode'] = $value['supCode'];
+            if (!empty($isFast) && 1 == $isFast) {
+                $addData['skuProCount'] = $value['skCount'];
+                $addData['status'] = self::$GOODSBATCH_STATUS_PUTAWAY;
+            } else {
+                $addData['status'] = self::$GOODSBATCH_STATUS_CREATE;
+            }
+            $addData['reccode'] = $recCode;
+            $gbcode = $goodsbatchModel->insert($addData);
+            if (!$gbcode) {
+                venus_db_rollback();
+                $message = '添加入仓货品清单';
+                venus_throw_exception(2, $message);
+                return false;
+            }
+            if (!empty($isFast) && 1 == $isFast) {
+                $issetGoods = $goodsModel->queryBySkuCode($value['skCode']);
+                if ($issetGoods) {
+                    $goodsCode = $issetGoods['goods_code'];
+                    $init = $issetGoods['goods_init'] + $value['count'];
+                    $count = $issetGoods['goods_count'] + $value['count'];
+                    $skuinit = $issetGoods['sku_init'] + $value['skCount'];
+                    $skucount = $issetGoods['sku_count'] + $value['skCount'];
+                    $goodsRes = $goodsModel->updateCountAndInitByCode($goodsCode, $init, $count, $skuinit, $skucount);
+                } else {
+                    $goodsAddData = array(
+                        'init' => $value['count'],
+                        'count' => $value['count'],
+                        'spucode' => $value['spCode'],
+                        'skucode' => $value['skCode'],
+                        'skuinit' => $value['skCount'],
+                        'skucount' => $value['skCount'],
+                    );
+                    $goodsRes = $goodsModel->insert($goodsAddData);
+                }
+
+                $goodstoredAddData = array(
+                    'init' => $value['count'],
+                    'count' => $value['count'],
+                    'bprice' => $value['spBprice'],
+                    'gbcode' => $gbcode,
+                    'poscode' => $posCode,
+                    'spucode' => $value['spCode'],
+                    'supcode' => $value['supCode']
+                );
+                $goodstoredAddData['skucode'] = trim($value['skCode']);
+                $goodstoredAddData['skucount'] = $value['skCount'];
+                $goodstoredAddData['skuinit'] = $value['skCount'];
+                $addGoodstoredRes = $goodstoredModel->insert($goodstoredAddData);
+                if (!$goodsRes || !$addGoodstoredRes) {
+                    venus_db_rollback();
+                    $message = '存入库存';
+                    venus_throw_exception(2, $message);
+                    return false;
+                }
+            }
+
+        }
+        if (!empty($isFast) && 1 == $isFast) {
+            $uptRecFinish = $recModel->updateFinishTimeByCode($recCode);
+            if (empty($uptRecFinish)) {
+                venus_db_rollback();
+                $message = '完成入仓单失败';
+                venus_throw_exception(2, $message);
+                return false;
+            }
+        }
+        venus_db_commit();
+        $success = true;
+        $message = '';
+        return array($success, $data, $message);
+    }
+
+
+    /**
+     * @return array
+     * 入仓单管理/入仓单管理列表
+     */
+    public function receipt_search()
+    {
+        $warCode = $this->warCode;
+
+        $stime = $_POST['data']['stime'];//开始时间
+        $etime = $_POST['data']['etime'];//结束时间
+        $status = $_POST['data']['status'];//状态
+        $supcode = $_POST['data']['supcode'];//状态
+        $recCode = $_POST['data']['code'];//入仓单单号
+        $pageCurrent = $_POST['data']['pageCurrent'];//当前页数
+        $clause = array();
+        if (empty($pageCurrent)) {
+            $pageCurrent = 0;
+        }
+        if (!empty($stime)) {
+            $clause['sctime'] = $stime;
+        }
+        if (!empty($etime)) {
+            $clause['ectime'] = $etime;
+        }
+        if (!empty($supcode)) {
+            $clause['supcode'] = $supcode;
+        }
+
+        if (!empty($status)) $clause['status'] = $status;
+        if (!empty($recCode)) $clause['code'] = $recCode;
+
+        $recModel = ReceiptDao::getInstance($warCode);
+        $workerModel = WorkerDao::getInstance($warCode);
+
+        $totalCount = $recModel->queryCountByCondition($clause);
+        $pageLimit = pageLimit($totalCount, $pageCurrent);
+        $queryData = $recModel->queryListByCondition($clause, $pageLimit['page'], $pageLimit['pSize']);
+        $data = array(
+            "pageCurrent" => $pageCurrent,
+            "pageSize" => $pageLimit['pageSize'],
+            "totalCount" => $totalCount,
+        );
+        foreach ($queryData as $key => $value) {
+            $supData = SupplierDao::getInstance()->queryAllByCode($value['rec_supcode']);
+            $supName = $supData['sup_name'];
+            $data['list'][] = array(
+                "recCode" => $value['rec_code'],
+                "recCtime" => $value['rec_ctime'],
+                "recUcode" => $value['wor_code'],
+                "recUname" => $workerModel->queryByCode($value['wor_code'])['wor_name'],
+                "recSupCode" => $value['rec_supcode'],
+                "recSupName" => $supName,
+                "recMark" => $value['rec_mark'],
+                "recStatus" => $value['rec_status'],
+                "recStatMsg" => venus_receipt_status_desc($value['rec_status']),
+                "recType" => $value['rec_type'],
+                "recTypeMsg" => venus_receipt_type_desc($value['rec_type']),
+            );
+        }
+
+        $success = true;
+        $message = '';
+        return array($success, $data, $message);
+    }
+
+
+    /**
+     * @return array|bool
+     * 入仓单管理/入仓单管理之修改(1)入仓单详情
+     */
+    public
+    function receipt_detail()
+    {
+        $warCode = $this->warCode;
+
+        $pageCurrent = $_POST['data']['pageCurrent'];//当前页数
+        if (empty($pageCurrent)) $pageCurrent = 0;
+        $recCode = $_POST['data']['recCode'];
+        if (empty($recCode)) {
+            $message = "入仓单编号不能为空";
+            venus_throw_exception(1, $message);
+            return false;
+        } else {
+
+            $goodsbatchModel = GoodsbatchDao::getInstance($warCode);
+            $goodstoredModel = GoodstoredDao::getInstance($warCode);
+
+            $totalCount = $goodsbatchModel->queryCountByRecCode($recCode);
+            $pageLimit = pageLimit($totalCount, $pageCurrent);
+            $queryGbList = $goodsbatchModel->queryListByRecCode($recCode, $pageLimit['page'], $pageLimit['pSize']);
+            $data = array(
+                "pageCurrent" => $pageCurrent,
+                "pageSize" => $pageLimit['pageSize'],
+                "totalCount" => $totalCount,
+            );
+            foreach ($queryGbList as $value) {
+                $data['list'][] = array(
+                    "gbCode" => $value['gb_code'],
+                    "skName" => $value['spu_name'],
+                    "skCode" => $value['sku_code'],
+                    "skNorm" => $value['sku_norm'],
+                    "skCount" => $value['sku_count'],
+                    "skUnit" => $value['sku_unit'],
+                    "spBprice" => $value['gb_bprice'],//采购价
+                    "spCode" => $value['spu_code'],
+                    "spCount" => $value['gb_count'],
+                    "spUnit" => $value['spu_unit'],
+                    "spCunit" => $value['spu_cunit'],
+                    "spBrand" => $value['spu_brand'],
+                    "skuProCount" => floatval($value['promote_skucount']),
+                );
+            }
+            $success = true;
+            $message = '';
+            return array($success, $data, $message);
+        }
+    }
+
+
+    /**
+     * @return array|bool
+     * 入仓单管理/入仓单管理之修改(2)修改入仓单数量
+     */
+    public
+    function receipt_goods_count_update()
+    {
+
+        $warCode = $this->warCode;
+
+        if (empty($_POST['data']['recCode'])) venus_throw_exception(1, "入仓单编号不能为空");
+        if (empty($_POST['data']['gbCode'])) venus_throw_exception(1, "入仓单货品编号不能为空");
+        if (empty($_POST['data']['skCount'])) venus_throw_exception(1, "入仓单货品sku数量不能为空");
+        if (empty($_POST['data']['spBprice'])) venus_throw_exception(1, "入仓单货品spu价格不能为空");
+        if (empty($_POST['data']['spCunit'])) venus_throw_exception(1, "入仓单货品spu最小计量单位不能为空");
+
+        $recCode = $_POST['data']['recCode'];
+        $gbCode = $_POST['data']['gbCode'];
+        $skCount = $_POST['data']['skCount'];
+        $spBprice = $_POST['data']['spBprice'];
+        $count = $_POST['data']['count'];
+        $bprice = $spBprice * $count;
+        $spCunit = $_POST['data']['spCunit'];
+        if (!preg_match('/^[0-9]+(.[0-9]{1,2})?$/', $spBprice)) {
+            venus_throw_exception(4, "spu价格格式不正确");
+            return false;
+        }
+
+        if (!preg_match('/^[0-9]+(.[0-9]{1,2})?$/', $skCount)) {
+            venus_throw_exception(4, "sku数量格式不正确");
+            return false;
+        } else {
+            if (!empty($spCunit) && $spCunit == 1) {
+                if (floor($skCount) != $skCount) {
+                    venus_throw_exception(4, "sku数量格式不正确");
+                    return false;
+                }
+            }
+        }
+        if (!preg_match('/^[0-9]+(.[0-9]{1,2})?$/', $count)) {
+            venus_throw_exception(4, "spu总数量格式不正确");
+            return false;
+        } else {
+            if (!empty($spCunit) && $spCunit == 1) {
+                if (floor($count) != $count) {
+                    venus_throw_exception(4, "spu总数量格式不正确");
+                    return false;
+                }
+            }
+        }
+
+        $recModel = ReceiptDao::getInstance($warCode);
+        $goodsbatchModel = GoodsbatchDao::getInstance($warCode);
+
+
+        $isUpt = $recModel->queryByCode($recCode)['rec_status'];
+        if (in_array($isUpt, $this->RECEIPT_ALLOW_UPDATE)) {
+            $gbRes = $goodsbatchModel->updateByCode($gbCode, $count, $spBprice, $skCount);
+
+            if (!$gbRes) {
+                $message = "修改失败";
+                venus_throw_exception(2, $message);
+                return false;
+            } else {
+                $data['success'] = true;
+                $success = true;
+                $message = '';
+                return array($success, $data, $message);
+            }
+
+        } else {
+            venus_throw_exception(2001, '');
+            return false;
+        }
+
+    }
+
+
+    /**
+     * @return array|bool
+     *  入仓单管理之修改（3）增加入仓单货品
+     */
+    public
+    function receipt_goods_create()
+    {
+
+        $list = $_POST['data']['list'];
+
+        $warCode = $this->warCode;
+
+        $data = array();
+        $recCode = $_POST['data']['recCode'];
+        if (empty($recCode)) {
+            venus_throw_exception(1, "入仓单编号不能为空");
+        }
+
+        $recModel = ReceiptDao::getInstance($warCode);
+        $goodsbatchModel = GoodsbatchDao::getInstance($warCode);
+
+        $isUpt = $recModel->queryByCode($recCode)['rec_status'];
+        if (in_array($isUpt, $this->RECEIPT_ALLOW_UPDATE)) {
+            venus_db_starttrans();
+            //创建入仓单清单
+            foreach ($list as $key => $value) {
+                if (empty($value['skCode'])) {
+                    venus_throw_exception(1, "sku编号不能为空");
+                    return false;
+                }
+                if (empty($value['skCount'])) {
+                    venus_throw_exception(1, "sku数量不能为空");
+                    return false;
+                }
+
+                if (empty($value['spCode'])) {
+                    venus_throw_exception(1, "spu编号不能为空");
+                    return false;
+                }
+                if (empty($value['spBprice'])) {
+                    venus_throw_exception(1, "入仓单货品spu价格不能为空");
+                    return false;
+                }
+
+                if (!preg_match('/^[0-9]+(.[0-9]{1,2})?$/', $value['spBprice'])) {
+                    venus_throw_exception(4, "入仓单货品spu价格格式不正确");
+                    return false;
+                }
+
+                if (empty($value['count'])) {
+                    venus_throw_exception(1, "spu总数量不能为空");
+                    return false;
+                }
+                if (empty($value['spCunit'])) {
+                    venus_throw_exception(1, "spu最小计量单位不能为空");
+                    return false;
+                }
+
+                if (!preg_match('/^[0-9]+(.[0-9]{1,2})?$/', $value['skCount'])) {
+                    venus_throw_exception(4, "sku数量格式不正确");
+                    return false;
+                } else {
+                    if (!empty($value['spCunit']) && $value['spCunit'] == 1) {
+                        if (floor($value['skCount']) != $value['skCount']) {
+                            venus_throw_exception(4, "sku数量格式不正确");
+                            return false;
+                        }
+                    }
+                }
+                if (!preg_match('/^[0-9]+(.[0-9]{1,2})?$/', $value['count'])) {
+                    venus_throw_exception(4, "spu总数量格式不正确");
+                    return false;
+                } else {
+                    if (!empty($value['spCunit']) && $value['spCunit'] == 1) {
+                        if (floor($value['count']) != $value['count']) {
+                            venus_throw_exception(4, "spu总数量格式不正确");
+                            return false;
+                        }
+                    }
+                }
+                $addData = array(
+                    'skucode' => $value['skCode'],
+                    'skucount' => $value['skCount'],
+                    'spucode' => $value['spCode'],
+                    'count' => $value['count'],
+                    'bprice' => $value['spBprice'],
+                    'supcode' => $value['supCode'],
+                    'status' => self::$GOODSBATCH_STATUS_CREATE,
+                    'reccode' => $recCode,
+                );
+
+                $gbCode = $goodsbatchModel->insert($addData);
+                if (!$gbCode) {
+                    venus_db_rollback();
+                    $message = '创建入仓单清单';
+                    venus_throw_exception(2, $message);
+                    return false;
+                }
+            }
+
+            venus_db_commit();
+            $success = true;
+            $message = '';
+            return array($success, $data, $message);
+        } else {
+            venus_throw_exception(2002, '');
+            return false;
+        }
+
+    }
+
+
+    /**
+     * @return array|bool
+     * 入仓单管理之修改（4）删除入仓单货品
+     */
+    public
+    function receipt_goods_delete()
+    {
+        $warCode = $this->warCode;
+
+
+        if (empty($_POST['data']['recCode'])) {
+            venus_throw_exception(1, "入仓单编号不能为空");
+            return false;
+        }
+        if (empty($_POST['data']['gbCode'])) {
+            venus_throw_exception(1, "入仓单货品编号不能为空");
+            return false;
+        }
+        $recCode = $_POST['data']['recCode'];
+        $gbCode = $_POST['data']['gbCode'];
+        $data = array();
+
+        $recModel = ReceiptDao::getInstance($warCode);
+        $goodsbatchModel = GoodsbatchDao::getInstance($warCode);
+
+        $isUpt = $recModel->queryByCode($recCode)['rec_status'];
+        if (in_array($isUpt, $this->RECEIPT_ALLOW_UPDATE)) {
+            $gbUptRes = $goodsbatchModel->deleteByCode($gbCode, $recCode);
+            if (!$gbUptRes) {
+                venus_throw_exception(2, '删除入仓单货品');
+                return false;
+            } else {
+                $success = true;
+                $message = '';
+            }
+            return array($success, $data, $message);
+        } else {
+            venus_throw_exception(2003, '');
+            return false;
+        }
+
+    }
+
+
+    /**
+     * @return array|bool
+     * 入仓单管理/入仓单管理之查看轨迹
+     */
+    public
+    function receipt_trace_search()
+    {
+        $warCode = $this->warCode;
+
+
+        if (empty($_POST['data']['recCode'])) {
+            venus_throw_exception(1, "入仓单编号不能为空");
+            return false;
+        }
+        $recCode = $_POST['data']['recCode'];
+        $data = array();
+        $traceService = TraceService::getInstance();
+        $traceData = $traceService->query_data_by_reccode($warCode, $recCode);
+        if (empty($traceData)) {
+            venus_throw_exception(10, '');
+            return false;
+        } else {
+            $success = true;
+            $message = '';
+            $data['list'] = $traceData;
+            return array($success, $data, $message);
+        }
+
+    }
+
+
+    /**
+     * @return array|bool
+     * 入仓单管理/入仓单管理之删除
+     */
+    public
+    function receipt_delete()
+    {
+        $warCode = $this->warCode;
+
+
+        if (empty($_POST['data']['recCode'])) {
+            venus_throw_exception(1, "入仓单编号不能为空");
+            return false;
+        }
+        $data = array();
+        $recCode = $_POST['data']['recCode'];
+
+        $recModel = ReceiptDao::getInstance($warCode);
+        $traceService = TraceService::getInstance();
+
+        $isUpt = $recModel->queryByCode($recCode)['rec_status'];
+        if (in_array($isUpt, $this->RECEIPT_ALLOW_UPDATE)) {
+            venus_db_starttrans();
+            $recStatus = self::$RECEIPT_STATUS_CANCEL;
+            $uptRec = $recModel->updateStatusByCode($recCode, $recStatus);
+            $traceMark = "删除入仓单";
+            $trace = $traceService->update_trace_data_by_reccode($warCode, $recCode, $traceMark);
+            if (!$uptRec || !$trace) {
+                venus_db_rollback();
+                $message = '删除入仓单';
+                venus_throw_exception(2, $message);
+                return false;
+            } else {
+                venus_db_commit();
+                $success = true;
+                $message = '';
+                return array($success, $data, $message);
+            }
+
+        } else {
+            venus_throw_exception(2003, '');
+            return false;
+        }
+    }
+
+    /**
+     * @return array|bool
+     * 表格创建入仓单
+     */
+    public function rec_import()
+    {
+//        return $this->rec_purchasing_import();
+        $warCode = $this->warCode;//仓库编号
+        //声明所需要用的Model及服务
+        $excelService = ExcelService::getInstance();
+        $traceService = TraceService::getInstance();
+        $spuModel = SpuDao::getInstance($warCode);
+        $skuModel = SkuDao::getInstance($warCode);
+        $recModel = ReceiptDao::getInstance($warCode);
+
+        $fileContent = $excelService->upload("file");//导入文件
+
+        $skuList = array();
+        $supCodeArr = array();
+        if (count($fileContent) == 1) {
+            $param = array(
+                "data" => array(
+                    "isFast" => 1,
+                )
+            );
+            $recListData = array();
+            $listSkuData = array();
+            $isSuccess = true;
+            foreach ($fileContent as $sheetName => $list) {
+
+                if (substr($sheetName, 0, 2) != "JM") {
+                    $success = false;
+                    $message = "表格分表名称不符合要求";
+                    return array($success, array(), $message);
+                }
+                $dicts = array(
+                    "A" => "skCode",//sku编号
+                    "F" => "supCode",//sku编号
+                    "L" => "skInit",//sku采购数量
+                    "Q" => "skCount",//sku数量
+                    "N" => "skBprice",//sku单价
+                );
+                $issetRec = $recModel->queryByEcode($sheetName);//查询是否存在
+                if (!empty($issetRec)) return array(false, array(), "入仓单已存在");
+                $param["data"]["mark"] = $sheetName;
+                unset($list[0]);
+                $skuList = array_merge($skuList, $list);
+                foreach ($skuList as $line => $skuItem) {
+                    $skuData = array();
+                    foreach ($dicts as $col => $key) {
+                        $skuData[$key] = isset($skuItem[$col]) ? $skuItem[$col] : "";
+                    }
+                    var_dump($skuData);
+                    exit();
+                    if (count(array_keys($skuItem, "")) == count($skuItem)) {
+                        break;
+                    } else {
+                        if ($skuData['skCount'] == 0 || $skuData['skCount'] == null || $skuData['skCode'] == null || $skuData['skInit'] == 0 || $skuData['skInit'] == null) {
+                            continue;
+                        } else {
+                            $data = array(
+                                "skCode" => $skuData['skCode'],
+                                "bprice" => $skuData['skBprice'],
+                            );
+                            $skuInfo = $skuModel->queryByCode($data['skCode']);
+                            if (empty($skuInfo)) {
+                                $success = false;
+                                $message = "编号为" . $skuData['skCode'] . "的货品不存在";
+                                return array($success, array(), $message);
+                            }
+                            $spuCount = $skuInfo['spu_count'];
+                            $spBprice = bcdiv($skuData['skBprice'], $spuCount, 2);
+                            if ($spBprice == 0 || $spBprice == null) {
+                                $success = false;
+                                $message = "编号为" . $skuData['skCode'] . "的货品采购价为0";
+                                return array($success, array(), $message);
+                            }
+                            if ($spBprice != 0 || $spBprice != null && $spBprice != $skuInfo['spu_bprice']) {
+                                $isSuccess = $isSuccess && $spuModel->updateBpriceCodeByCode($skuInfo['spu_code'], $spBprice);
+                            }
+                            if (empty($supCodeArr)) {
+                                $supCodeArr[] = $skuData['supCode'];
+                            }
+                            if (substr($skuData['supCode'], 0, 2) != "SU") {
+                                $success = false;
+                                $nowLine = $line + 1;
+                                $message = "第" . $nowLine . "行供应商编号不正确";
+                                return array($success, array(), $message);
+                            }
+                            if ($skuData['supCode'] != $supCodeArr[0]) {
+                                $success = false;
+                                $nowLine = $line + 1;
+                                $message = "第" . $nowLine . "行供应商编号与第一行供应商不一样";
+                                return array($success, array(), $message);
+                            }
+                            $supCode = $skuData['supCode'];
+                            if ($supCode != $skuInfo['sup_code']) {
+                                $isSuccess = $isSuccess && $spuModel->updateSupCodeByCode($skuInfo['spu_code'], $supCode);
+                            }
+                            $spCunit = $skuInfo['spu_cunit'];
+                            if ($spCunit == 1) {
+                                $float = 0;
+                            } elseif ($spCunit == "0.1") {
+                                $float = 1;
+                            } else {
+                                $float = 2;
+                            }
+                            if (in_array($data, $listSkuData)) {
+                                $skuLine = array_keys($listSkuData, $data);
+                                $skuLine = $skuLine[0];
+                                $recListData[$skuLine]['skInit'] = bcadd($recListData[$skuLine]['skInit'], $skuData['skInit'], $float);
+                                $recListData[$skuLine]['skCount'] = bcadd($recListData[$skuLine]['skCount'], $skuData['skCount'], $float);
+                                $recListData[$skuLine]['count'] = bcmul($recListData[$skuLine]['skCount'], $skuInfo['spu_count'], $float);
+                                continue;
+                            } else {
+                                $listSkuData[$line] = $data;
+                                $recListData[$line] = $skuData;
+                                $recListData[$line]['spCode'] = $skuInfo['spu_code'];
+                                $recListData[$line]['supCode'] = $supCode;
+                                $recListData[$line]['spBprice'] = bcdiv($skuData['skBprice'], $skuInfo['spu_count'], 2);
+                                $recListData[$line]['spCunit'] = $skuInfo['spu_cunit'];
+                                $recListData[$line]['count'] = bcmul($skuData['skCount'], $skuInfo['spu_count'], $float);
+                            }
+                        }
+
+                    }
+                }
+            }
+
+            if ($isSuccess) {
+                if (!empty($recListData)) {
+                    $param["data"]["list"] = $recListData;
+                    $param["data"]["supcode"] = $supCodeArr[0];
+                    return $this->receipt_create($param);
+                } else {
+                    $success = false;
+                    $message = "无货品信息";
+                    return array($success, array(), $message);
+                }
+            } else {
+                $success = false;
+                $message = "修改成本价失败";
+                return array($success, array(), $message);
+            }
+        } else {
+            $success = false;
+            $message = "表格不符合要求，有多个分表";
+            return array($success, array(), $message);
+        }
+    }
+
+    /**
+     * @return array|bool
+     * 采购部表格导入
+     */
+    public function rec_purchasing_import()
+    {
+        $warCode = $this->warCode;//仓库编号
+        //声明所需要用的Model及服务
+        $excelService = ExcelService::getInstance();
+        $traceService = TraceService::getInstance();
+        $spuModel = SpuDao::getInstance($warCode);
+        $skuModel = SkuDao::getInstance($warCode);
+        $recModel = ReceiptDao::getInstance($warCode);
+
+        $fileContent = $excelService->upload("file");//导入文件
+
+        $skuList = array();
+        $supCodeArr = array();
+        if (count($fileContent) == 1) {
+            $param = array(
+                "data" => array(//                    "isFast" => 1,
+                )
+            );
+            $recListData = array();
+            $listSkuData = array();
+            $isSuccess = true;
+            foreach ($fileContent as $sheetName => $list) {
+
+                if (substr($sheetName, 0, 2) != "JM") {
+                    $success = false;
+                    $message = "表格分表名称不符合要求";
+                    return array($success, array(), $message);
+                }
+
+                $dicts = array(
+                    "A" => "skCode",//sku编号
+                    "F" => "supCode",//sku编号
+                    "L" => "skInit",//sku采购数量
+                    "N" => "skBprice",//sku单价
+                );
+                $issetRec = $recModel->queryByEcode($sheetName);//查询是否存在
+                if (!empty($issetRec)) return array(false, array(), "入仓单已存在");
+                $param["data"]["mark"] = $sheetName;
+                unset($list[0]);
+                $skuList = array_merge($skuList, $list);
+                foreach ($skuList as $line => $skuItem) {
+                    $skuData = array();
+                    foreach ($dicts as $col => $key) {
+                        $skuData[$key] = isset($skuItem[$col]) ? $skuItem[$col] : "";
+                    }
+                    if (count(array_keys($skuItem, "")) == count($skuItem)) {
+                        break;
+                    } else {
+                        if ($skuData['skCode'] == null || $skuData['skInit'] == 0 || $skuData['skInit'] == null) {
+                            continue;
+                        } else {
+                            $data = array(
+                                "skCode" => $skuData['skCode'],
+                                "bprice" => $skuData['skBprice'],
+                            );
+                            $skuInfo = $skuModel->queryByCode($data['skCode']);
+                            if (empty($skuInfo)) {
+                                $success = false;
+                                $message = "编号为" . $skuData['skCode'] . "的货品不存在";
+                                return array($success, array(), $message);
+                            }
+                            $spuCount = $skuInfo['spu_count'];
+                            $spBprice = bcdiv($skuData['skBprice'], $spuCount, 2);
+                            if ($spBprice == 0 || $spBprice == null) {
+                                $success = false;
+                                $message = "编号为" . $skuData['skCode'] . "的货品采购价为0";
+                                return array($success, array(), $message);
+                            }
+                            if ($spBprice != 0 || $spBprice != null && $spBprice != $skuInfo['spu_bprice']) {
+                                $isSuccess = $isSuccess && $spuModel->updateBpriceCodeByCode($skuInfo['spu_code'], $spBprice);
+                            }
+                            if (empty($supCodeArr)) {
+                                $supCodeArr[] = $skuData['supCode'];
+                            }
+                            if (substr($skuData['supCode'], 0, 2) != "SU") {
+                                $success = false;
+                                $nowLine = $line + 1;
+                                $message = "第" . $nowLine . "行供应商编号不正确";
+                                return array($success, array(), $message);
+                            }
+                            if ($skuData['supCode'] != $supCodeArr[0]) {
+                                $success = false;
+                                $nowLine = $line + 1;
+                                $message = "第" . $nowLine . "行供应商编号与第一行供应商不一样";
+                                return array($success, array(), $message);
+                            }
+                            $supCode = $skuData['supCode'];
+                            if ($supCode != $skuInfo['sup_code']) {
+                                $isSuccess = $isSuccess && $spuModel->updateSupCodeByCode($skuInfo['spu_code'], $supCode);
+                            }
+                            $spCunit = $skuInfo['spu_cunit'];
+                            if ($spCunit == 1) {
+                                $float = 0;
+                            } elseif ($spCunit == "0.1") {
+                                $float = 1;
+                            } else {
+                                $float = 2;
+                            }
+                            if (in_array($data, $listSkuData)) {
+                                $skuLine = array_keys($listSkuData, $data);
+                                $skuLine = $skuLine[0];
+                                $recListData[$skuLine]['skInit'] = bcadd($recListData[$skuLine]['skInit'], $skuData['skInit'], $float);
+                                $recListData[$skuLine]['skCount'] = 0;
+                                $recListData[$skuLine]['count'] = 0;
+                                continue;
+                            } else {
+                                $listSkuData[$line] = $data;
+                                $recListData[$line] = $skuData;
+                                $recListData[$line]['spCode'] = $skuInfo['spu_code'];
+                                $recListData[$line]['supCode'] = $supCode;
+                                $recListData[$line]['spBprice'] = bcdiv($skuData['skBprice'], $skuInfo['spu_count'], 2);
+                                $recListData[$line]['spCunit'] = $skuInfo['spu_cunit'];
+                                $recListData[$line]['skCount'] = 0;
+                                $recListData[$line]['count'] = 0;
+                            }
+                        }
+
+                    }
+                }
+            }
+
+            if ($isSuccess) {
+                if (!empty($recListData)) {
+                    $param["data"]["list"] = $recListData;
+                    $param["data"]["supcode"] = $supCodeArr[0];
+                    return $this->receipt_create($param);
+                } else {
+                    $success = false;
+                    $message = "无货品信息";
+                    return array($success, array(), $message);
+                }
+            } else {
+                $success = false;
+                $message = "修改成本价失败";
+                return array($success, array(), $message);
+            }
+        } else {
+            $success = false;
+            $message = "表格不符合要求，有多个分表";
+            return array($success, array(), $message);
+        }
+    }
+
+
+    /**
+     * @return array
+     * 导出入仓单
+     */
+    public function rec_export()
+    {
+        $code = $_POST['data']['code'];
+        $warCode = $this->warCode;//仓库编号
+        $recModel = ReceiptDao::getInstance($warCode);
+        $gbModel = GoodsbatchDao::getInstance($warCode);
+        $recInfo = $recModel->queryByCode($code);
+        $data = array();
+        $letterCount = 0;
+        if (!in_array($recInfo['rec_status'], array(self::$RECEIPT_STATUS_CREATE, self::$RECEIPT_STATUS_CANCEL))) {
+            $warInfoRec = WorkerDao::getInstance($warCode)->queryByCode($this->worcode);
+            $taskModel = TaskDao::getInstance($warCode);
+            $taskInfo = $taskData = $taskModel->queryByExtra($code);
+            if (!empty($taskInfo) && $taskInfo['task_status'] == 3) {
+                $ftime = $taskInfo['task_ftime'];
+            } else {
+                $ftime = $recInfo['rec_ftime'];
+            }
+            $data['info'] = array(
+                "type" => 1,
+                "code" => $recInfo['rec_code'],
+                "ctime" => $recInfo['rec_ctime'],
+                "warName" => $warInfoRec['war_name'],
+                "worName" => $warInfoRec['wor_rname'],
+                "ftime" => $ftime
+            );
+            $gbData = $gbModel->queryListByRecCode($code, 0, 100000);
+            foreach ($gbData as $gbDatum) {
+                $skuList = array(
+                    "name" => $gbDatum["spu_name"],
+                    "skuNorm" => $gbDatum["sku_norm"],
+                    "skuCount" => floatval($gbDatum['gb_skuinit']),
+                    "skuProCount" => floatval($gbDatum['sku_count']),
+                    "unit" => $gbDatum["sku_unit"],
+                    "bprice" => bcmul($gbDatum["gb_bprice"], $gbDatum['spu_count']),
+                    "supName" => $gbDatum["sup_name"],
+                );
+                $letterCount = count($skuList);
+                $data['list'][] = $skuList;
+            }
+        }
+        $letters = array();
+        for ($letter = 0; $letter < $letterCount; $letter++) {
+            $letters[] = chr(65 + $letter);
+        }
+
+        $excelData["入仓单详情"] = array(
+            "B1" => $data['info']['code'],
+            "B2" => $data['info']['worName'],
+            "B3" => $data['info']['ctime'],
+            "B4" => $data['info']['ftime'],
+        );
+        $line = array();
+        foreach ($data['list'] as $datum) {
+            $line[] = array_values($datum);
+        }
+        $countLineNum = count($line) + 6;
+        for ($lineNum = 6; $lineNum < $countLineNum; $lineNum++) {
+            for ($rows = 0; $rows < count($letters); $rows++) {
+                $num = $letters[$rows] . $lineNum;
+                $excelData["入仓单详情"][$num] = $line[$lineNum - 6][$rows];
+            }
+        }
+        $fileName = ExcelService::getInstance()->exportExcelByTemplate($excelData, "004");
+        if ($fileName) {
+            $success = true;
+            $data = $fileName;
+            $message = "";
+        } else {
+            $success = false;
+            $data = "";
+            $message = "下载失败";
+        }
+        return array($success, $data, $message);
+    }
+}

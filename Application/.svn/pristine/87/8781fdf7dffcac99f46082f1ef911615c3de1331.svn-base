@@ -1,0 +1,110 @@
+<?php
+/**
+ * Created by PhpStorm.
+ * User: lingn
+ * Date: 2019/5/8
+ * Time: 14:32
+ */
+
+ini_set('memory_limit', '1000M');
+define('IS_MASTER', true);
+define('APP_DIR', dirname(__FILE__) . '/../../../../');
+//define('APP_DIR', '/home/dev/venus/');
+//define('APP_DIR', '/home/wms/app/');//正式站目录为/home/wms/app/
+define('APP_DEBUG', true);
+define('APP_MODE', 'cli');
+define('APP_PATH', APP_DIR . './Application/');
+define('RUNTIME_PATH', APP_DIR . './Runtime_script/'); // 系统运行时目录
+require APP_DIR . './ThinkPHP/ThinkPHP.php';
+
+//在命令行中输入 chcp 65001 回车, 控制台会切换到新的代码页,新页面输出可为中文
+$time = venus_script_begin("开始获取采购统计财务报表数据");
+$type = "month";
+if ($type == "week") {
+    $stime = date("Y-m-d 00:00:00", strtotime("-1{$type}"));
+    $etime = date("Y-m-d 00:00:00", time());
+} else {
+    $stime = date("Y-m-01 00:00:00", strtotime("-1month"));
+    $etime = date("Y-m-01 00:00:00", time());
+}
+echo $type . PHP_EOL;
+echo $stime . PHP_EOL;
+echo $etime . PHP_EOL;
+//getReturnData($stime, $etime);
+//getRecData($stime, $etime);
+
+function getReturnData($stime, $etime)
+{
+    $igsSupDataList = array();
+    $condition = array(
+        "inv_ctime" => array(array('EGT', $stime), array('ELT', $etime), 'AND'),
+        "inv.inv_type" => 6,
+        "gb.sup_code" =>
+            array("not in",
+                array("SU00000000000002",
+                    "SU00000000000003"))
+    );
+    $igsDataCount = M("igoodsent")
+        ->alias("igs")
+        ->join("LEFT JOIN `wms_goodstored` gs ON gs.`gs_code`=igs.`gs_code`")
+        ->join("LEFT JOIN `wms_goodsbatch` gb ON gb.gb_code=gs.gb_code")
+        ->join("JOIN `wms_invoice` inv ON inv.`inv_code`=igs.inv_code")
+        ->where($condition)->count();
+    $igsDataList = M("igoodsent")
+        ->alias("igs")
+        ->field("igs.sku_count,igs.sku_code,igs.igs_bprice,igs.gs_code,inv.inv_type,inv.inv_ctime,gb.sup_code,rec.rec_ctime")
+        ->join("LEFT JOIN `wms_goodstored` gs ON gs.`gs_code`=igs.`gs_code`")
+        ->join("LEFT JOIN `wms_goodsbatch` gb ON gb.gb_code=gs.gb_code")
+        ->join("LEFT JOIN `wms_receipt` rec ON rec.rec_code=gb.rec_code")
+        ->join("JOIN `wms_invoice` inv ON inv.`inv_code`=igs.inv_code")
+        ->where($condition)
+        ->limit(0, $igsDataCount)->select();
+    foreach ($igsDataList as $igsData) {
+        $supCode = $igsData["sup_code"];
+        $skuCode = $igsData["sku_code"];
+        $skuCount = $igsData["sku_count"];
+        $bprice = $igsData["igs_bprice"];
+        $ctime = date("Y-m-d", strtotime($igsData["rec_ctime"]));
+        $money = floatval(bcmul($bprice, $skuCount, 6));
+        $igsSupDataList[$supCode][$ctime][$skuCode]["money"] = bcadd($igsSupDataList[$supCode][$ctime][$skuCode]["money"], $money, 2);
+        $igsSupDataList[$supCode][$ctime][$skuCode]["count"] = bcadd($igsSupDataList[$supCode][$ctime][$skuCode]["count"], $skuCount, 2);
+        $igsSupDataList[$supCode][$ctime][$skuCode]["bprice"] = bcdiv($igsSupDataList[$supCode][$ctime][$skuCode]["money"], $igsSupDataList[$supCode][$ctime][$skuCode]["count"], 2);
+    }
+//    echo json_encode($igsDataList);
+//    echo json_encode($igsSupDataList);
+//    exit();
+    return $igsSupDataList;
+}
+
+
+function getRecData($stime, $etime)
+{
+    $condition = array(
+        "rec_ctime" => array(array('EGT', $stime), array('ELT', $etime), 'AND'),
+        "rec_type" => 1,
+        "rec_mark" => array("notlike", "OT%")
+    );
+    $gbDataCount = M("goodsbatch")
+        ->alias("gb")
+        ->join("LEFT JOIN `wms_receipt` rec ON rec.rec_code=gb.rec_code")
+        ->where($condition)->count();
+    $gbDataList = M("goodsbatch")
+        ->alias("gb")
+        ->field("rec.rec_ctime,gb.gb_bprice,gb.sku_code,gb.sku_count,gb.sup_code")
+        ->join("LEFT JOIN `wms_receipt` rec ON rec.rec_code=gb.rec_code")
+        ->where($condition)
+        ->limit(0, $gbDataCount)->select();
+    $gbSupDataList = array();
+    foreach ($gbDataList as $gbData) {
+        $supCode = $gbData["sup_code"];
+        $skuCode = $gbData["sku_code"];
+        $skuCount = $gbData["sku_count"];
+        $bprice = $gbData["gb_bprice"];
+        $ctime = date("Y-m-d", strtotime($gbData["rec_ctime"]));
+        $money = floatval(bcmul($bprice, $skuCount, 6));
+        $gbSupDataList[$supCode][$ctime][$skuCode]["money"] = bcadd($gbSupDataList[$supCode][$ctime][$skuCode]["money"], $money, 2);
+        $gbSupDataList[$supCode][$ctime][$skuCode]["count"] = bcadd($gbSupDataList[$supCode][$ctime][$skuCode]["count"], $skuCount, 2);
+        $gbSupDataList[$supCode][$ctime][$skuCode]["bprice"] = bcdiv($gbSupDataList[$supCode][$ctime][$skuCode]["money"], $gbSupDataList[$supCode][$ctime][$skuCode]["count"], 2);
+    }
+    return $gbSupDataList;
+}

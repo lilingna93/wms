@@ -1,0 +1,12 @@
+const argv = process.argv
+const task = require('./public/service/task')
+
+// console.log(argv.splice(2))
+
+let autoTask = () => {
+    task.task('ZTO');
+}
+
+autoTask();
+
+

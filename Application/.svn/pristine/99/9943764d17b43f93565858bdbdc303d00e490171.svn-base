@@ -1,0 +1,102 @@
+const fetchMethods = require('../javascript/fetch');
+const drawImg = require('../javascript/drawBarcode')
+const api = require('../utils/api');
+const strJion = require('../utils/strJion');
+const param = require('../utils/params');
+const log = require('../utils/winston');
+
+
+
+
+const {query, insert} = require('../database/query')
+
+
+let ZTO_service = async () => {
+    let result = await query('select * from wms_shoporders where logistics_status = 1', [])
+    console.log(result)
+    console.log('start',new Date().toLocaleString())
+
+    /*
+      let result = await query('insert into goods set ?',{create_time:"2017-05-09 16:39:00",price:5555555.00,inventory:11,category:"",imgs:"",onsale:0,name:'王五'})
+
+      let result = await query('update goods set name = ?  where  id = ?',['無敵强', 41])
+
+      let result = await query("delete from goods where id = 59",[])
+    */
+    /*log.logger.info(result,{timestamp: new Date().toLocaleString(), pid: process.pid, type:'ZTO-axios'})
+*/
+    const res = await task();
+    console.log(res,'end',new Date().toLocaleString())
+
+    for (let i = 0; i < result.length; i++) {
+        const res = await task(result[i]);
+        // if (!res.status.status || (res.res.status !== undefined && !res.res.status)) {
+        //     ZTO_service();
+        // }
+    }
+}
+
+
+let task = async (result) => {
+
+    /*
+      result[i].buyer_name
+      result[i].buyer_mobile
+      result[i].buyer_city
+      result[i].buyer_address
+
+      */
+
+    let data = '{' +
+        '"partner":"e823306680284cf6a0beab0871862c65","id":"xfs101100111011",' +
+        '"sender":{"name":"XXX","mobile":"1391***5678","city":"上海,上海市,青浦区","address":"华新镇华志路XXX号"},' +
+        '"receiver":{"name":"XXX","mobile":"136*****321","city":"四川省,XXX,XXXX","address":"育德路XXX号"},' +
+        '}';
+
+    let params = param.paramsHandle(data,'submitAgent');
+
+
+    let res = await fetchMethods.globalFetch(api.InsertSubmitagent, params);
+
+    /*
+      result[i].buyer_state
+      result[i].buyer_city
+      result[i].buyer_district
+      result[i].buyer_address
+      */
+
+    let mData = ' {"unionCode": "536178917066","send_province": "上海市","send_city": "上海市","send_district": "青浦区","receive_province": "河南省","receive_city": "信阳市","receive_district": "息县","receive_address": "新汽车站北100米"}'
+
+    let markData = param.paramsHandle(mData,'GETMARK');
+    let getmark = await fetchMethods.globalFetch(api.bagAddrMarkGetmark, markData);
+
+
+    if (!res.result || !getmark.status) {
+        console.log({timestamp: new Date().toLocaleString(),submitagent:res,bagAddrMark:getmark,msg:'api error'});
+    } else {
+        const codeType = 'code128';
+        let billCode = res.data.billCode
+        billCode = strJion.strJion(billCode);
+        const barcodeParams = {data: res.data.billCode, width: 210, height: 40}
+        let codeMsg = {
+            type: "ZTO",
+            _addressee: '张三 010-xxxxxxxx',
+            _sender: '李四 010-xxxxxxxx',
+            _mailAddress: '北京市海淀区',
+            _receivAddress: '北京市朝阳区王府井',
+            id:"id",
+            getmark: getmark.result
+        }
+        var status = await drawImg.drawBarCode(billCode, codeType, barcodeParams, codeMsg);
+    }
+    let results = {
+        res: res,
+        status: status || false
+    }
+    return results;
+}
+
+
+module.exports = {
+    ZTO_service
+}

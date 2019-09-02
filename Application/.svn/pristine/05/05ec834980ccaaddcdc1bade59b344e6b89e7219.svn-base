@@ -1,0 +1,16 @@
+/*const mysqlConfig = {
+    user: 'root',
+    password: 'password',
+    database: 'test',
+    host: '127.0.0.1',
+    port: 3306
+}*/
+
+const mysqlConfig = {
+    user: 'venusdb',
+    password: 'RVbHZAm88f5ufos9',
+    database: 'venus_wms',
+    host: '180.76.106.103',
+    port: 3306
+}
+module.exports = mysqlConfig

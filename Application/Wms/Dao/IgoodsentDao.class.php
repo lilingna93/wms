@@ -1,0 +1,337 @@
+<?php
+
+namespace Wms\Dao;
+
+use Common\Common\BaseDao;
+use Common\Common\BaseDaoInterface;
+
+/**
+ * 发货批次数据
+ * Class IgoodsentDao
+ * @package Wms\Dao
+ */
+class IgoodsentDao extends BaseDao implements BaseDaoInterface
+{
+
+
+    /**
+     * IgoodsentDao constructor.
+     */
+    function __construct()
+    {
+    }
+    //添加数据[count,bprice,spucode,gscode,invcode]
+
+    /**
+     * @param $item
+     * @return bool
+     */
+    public function insert($item)
+    {
+        $code = venus_unique_code("GS");
+        $data = array(
+            "igs_code" => $code,
+            "igs_count" => $item["count"],  //不通批次货架货品的出仓货品spu数量
+            "igs_bprice" => $item["bprice"], //不通批次货架货品的出仓货品spu采购价格，即成本价
+            "igs_ctime" => venus_current_datetime(),//产生时间
+            "spu_code" => $item["spucode"],//spu编号
+            "gs_code" => $item["gscode"], //所属货品批次货架中货品的货品编号
+            "igo_code" => $item["igocode"],//所属出仓货品清单中的货品编号
+            "sku_code" => $item["skucode"],//sku编号，货品出仓实际规格数据信息
+            "sku_count" => $item["skucount"],//sku数量，即货品出仓按规格计算的货品数量
+            "inv_code" => $item["invcode"], //所属出仓编号
+            "war_code" => $this->warehousecode,//所属仓库编号
+        );
+        if (isset($item['bcode'])) {
+            $data['bench_code'] = $item['bcode'];
+        }
+        return M("Igoodsent")->add($data) ? $code : false;
+    }
+    //查询
+
+    /**
+     * @param $code
+     * @return mixed
+     */
+    public function queryByCode($code)
+    {
+        $condition = array("igs.war_code" => $this->warehousecode, "igs_code" => $code);
+        return M("Igoodsent")->alias('igs')->field('*,spu.spu_code')
+            ->join("JOIN wms_sku sku ON sku.sku_code = igs.sku_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = igs.spu_code")
+            ->where($condition)->order('igs.id desc')->fetchSql(false)->find();
+    }
+    //查询
+
+    /**
+     * @param $cond
+     * @param int $page
+     * @param int $count
+     * @return mixed
+     */
+    public function queryListByCondition($cond, $page = 0, $count = 100)
+    {
+        $condition = $this->conditionFilter($cond);
+        if (isset($cond["spucode"])) {
+            $condition['igs.spu_code'] = $cond["spucode"];
+        }
+        if (isset($cond["skucode"])) {
+            $condition['igs.sku_code'] = $cond["skucode"];
+        }
+        return M("Igoodsent")->alias('igs')->field('*,spu.spu_code,inv.inv_code,wor.wor_code,wor.wor_rname,inv.inv_receiver')
+            ->join("LEFT JOIN wms_invoice inv ON inv.inv_code = igs.inv_code")
+            ->join("LEFT JOIN wms_worker wor ON wor.wor_code = inv.wor_code")
+            ->join("JOIN wms_sku sku ON sku.sku_code = igs.sku_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = igs.spu_code")
+            ->where($condition)->order('igs.id desc')->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+    //总数
+
+    /**
+     * @param $cond
+     * @return mixed
+     */
+    public function queryCountByCondition($cond)
+    {
+        $condition = $this->conditionFilter($cond);
+        if (isset($cond["spucode"])) {
+            $condition['igs.spu_code'] = $cond["spucode"];
+        }
+        if (isset($cond["skucode"])) {
+            $condition['igs.sku_code'] = $cond["skucode"];
+        }
+        return M("Igoodsent")->alias('igs')->field('*,spu.spu_code')
+            ->join("JOIN wms_sku sku ON sku.sku_code = igs.sku_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = igs.spu_code")
+            ->where($condition)->order('igs.id desc')->fetchSql(false)->count();
+    }
+
+
+    //根据出仓单号，查询多条货品批次数据
+
+    /**
+     * @param $invcode
+     * @param int $page
+     * @param int $count
+     * @return mixed
+     */
+    public function queryListByInvCode($invcode, $page = 0, $count = 100)
+    {
+        $condition = array("igs.war_code" => $this->warehousecode, "inv_code" => $invcode);
+        return M("Igoodsent")->alias('igs')->field('*,spu.spu_code')
+            ->join("JOIN wms_sku sku ON sku.sku_code = igs.sku_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = igs.spu_code")
+            ->where($condition)->order('igs.id desc')->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+
+    //根据出仓单号，查询多条货品批次数量
+
+    /**
+     * @param $invcode
+     * @return mixed
+     */
+    public function queryCountByInvCode($invcode)
+    {
+        $condition = array("igs.war_code" => $this->warehousecode, "inv_code" => $invcode);
+        return M("Igoodsent")->alias('igs')
+            ->where($condition)->fetchSql(false)->count();
+    }
+
+    public function queryPrevMonth($cond, $page = 0, $count = 100)
+    {
+        $condition = $this->conditionFilter($cond);
+        if (isset($cond["spucode"])) {
+            $joincond = ' AND igs.spu_code = "' . $cond["spucode"] . '"';
+        }
+
+        return M("Igoodsent")->alias('igs')->field('igs.igs_count igs_count,igs.igs_bprice igs_bprice,igs.spu_code spu_code,
+        spu.spu_name spu_name,spu.spu_unit spu_unit,spu.spu_type spu_type')
+            ->join("JOIN wms_spu spu ON spu.spu_code = igs.spu_code {$joincond}")
+            ->order('igs_code desc')->limit("{$page},{$count}")
+            ->where($condition)->fetchSql(false)->select();
+    }
+
+    private function conditionFilter($cond)
+    {
+        $condition = array("igs.war_code" => $this->warehousecode);
+        if (isset($cond["sctime"]) && isset($cond["ectime"])) {
+            $condition["igs_ctime"] = array(array('EGT', $cond["sctime"]), array('ELT', $cond["ectime"]), 'AND');
+        } else if (isset($cond["sctime"])) {
+            $condition["igs_ctime"] = array("EGT", $cond["sctime"]);
+        } else if (isset($cond["ectime"])) {
+            $condition["igs_ctime"] = array("ELT", $cond["ectime"]);
+        }
+        if (isset($cond["invcode"])) {
+            $condition["igs.inv_code"] = $cond["invcode"];
+        }
+        if (isset($cond["igocode"])) {
+            $condition["igo_code"] = $cond["igocode"];
+        }
+        if (isset($cond["gscode"])) {
+            $condition["igs.gs_code"] = $cond["gscode"];
+        }
+        if (isset($cond["bcode"])) {
+            $condition["bench_code"] = $cond["bcode"];
+        }
+        if (isset($cond["pcode"])) {
+            $condition["porter_code"] = $cond["pcode"];
+        }
+        return $condition;
+    }
+
+    public function updateCountAndSkuCountByCode($code, $count, $skucount)
+    {
+        $condition = array("igs.war_code" => $this->warehousecode, "igs_code" => $code);
+        return M("Igoodsent")->alias('igs')
+            ->where($condition)->fetchSql(false)->save(array("igs_count" => $count, "sku_count" => $skucount));
+    }
+
+    public function deleteByCode($code)
+    {
+        $condition = array("war_code" => $this->warehousecode, "igs_code" => $code);
+        return M("Igoodsent")->where($condition)->fetchSql(false)
+            ->delete();
+    }
+
+    public function deleteByCodes($codes)
+    {
+        $condition = array("war_code" => $this->warehousecode, "igs_code" => array("IN", $codes));
+        return M("Igoodsent")->where($condition)->fetchSql(false)
+            ->delete();
+    }
+
+    public function queryListByInvCodeAndBenchCode($cond, $page = 0, $count = 100)
+    {
+        $condition = $this->conditionFilter($cond);
+        if (isset($cond["spucode"])) {
+            $condition['igs.spu_code'] = $cond["spucode"];
+        }
+        return M("Igoodsent")->alias('igs')->field('*,spu.spu_code,igs.sku_count')
+            ->join("JOIN wms_goodstored gs ON gs.gs_code = igs.gs_code")
+            ->join("JOIN wms_sku sku ON sku.sku_code = igs.sku_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = igs.spu_code")
+            ->where($condition)->order('igs.id desc')->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+
+    public function updateBenchCodeByCode($code, $bcode)
+    {
+        $condition = array("igs.war_code" => $this->warehousecode, "igs_code" => $code);
+        return M("Igoodsent")->alias('igs')
+            ->where($condition)->fetchSql(false)->save(array("bench_code" => $bcode));
+    }
+
+    //设为已拣货
+    public function updateBenchCodeByCodes($codes, $bcode)
+    {
+        $condition = array("igs.war_code" => $this->warehousecode, "igs_code" => array("IN", $codes));
+        return M("Igoodsent")->alias('igs')
+            ->where($condition)->fetchSql(false)->save(array("bench_code" => $bcode));
+    }
+
+    //设为未拣货
+    public function removeBenchCodeByCondition($cond)
+    {
+        $condition = $this->conditionFilter($cond);
+        return M("Igoodsent")->alias('igs')
+            ->where($condition)->fetchSql(false)->save(array("bench_code" => "NULL"));
+    }
+
+    //拣货完成
+    public function updatePorterCodeByInvCodeAndBenchCode($code, $bCode, $pcode)
+    {
+        $condition = array("igs.war_code" => $this->warehousecode, "inv_code" => $code, "bench_code" => $bCode);
+        return M("Igoodsent")->alias('igs')
+            ->where($condition)->fetchSql(false)->save(array("porter_code" => $pcode, "bench_code" => "NULL"));
+    }
+
+    public function deleteByIgoCode($code)
+    {
+        $condition = array("war_code" => $this->warehousecode, "igo_code" => $code);
+        return M("Igoodsent")->where($condition)->fetchSql(false)
+            ->delete();
+    }
+
+    public function queryByIgoCode($code)
+    {
+        $condition = array("igs.war_code" => $this->warehousecode, "igo_code" => $code);
+        return M("Igoodsent")->alias('igs')->field('*,spu.spu_code')
+            ->join("JOIN wms_sku sku ON sku.sku_code = igs.sku_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = igs.spu_code")
+            ->where($condition)->order('igs.igs_code desc')->fetchSql(false)->select();
+    }
+
+    public function queryListByGsCode($code)
+    {
+        $condition = array("igs.war_code" => $this->warehousecode, "gs_code" => $code);
+        return M("Igoodsent")->alias('igs')->field('*,spu.spu_code')
+            ->join("JOIN wms_sku sku ON sku.sku_code = igs.sku_code")
+            ->join("JOIN wms_spu spu ON spu.spu_code = igs.spu_code")
+            ->where($condition)->order('igs.igs_code desc')->fetchSql(false)->select();
+    }
+
+    public function updateBpriceByCode($code, $spuCode, $bprice)
+    {
+        $condition = array("war_code" => $this->warehousecode, "igs_code" => $code, "spu_code" => $spuCode);
+        return M("Igoodsent")->where($condition)
+            ->save(array("timestamp" => venus_current_datetime(), "igs_bprice" => $bprice));
+    }
+
+    //退货拆分订单修改所属出仓单
+    public function updateInvCodeByCode($code, $invcode)
+    {
+        $condition = array("war_code" => $this->warehousecode, "igs_code" => $code);
+        return M("Igoodsent")->where($condition)
+            ->save(array("timestamp" => venus_current_datetime(), "inv_code" => $invcode));
+    }
+
+    //退货拆分订单修改所属出仓单
+    public function updateIgoCodeByCode($code, $igocode)
+    {
+        $condition = array("war_code" => $this->warehousecode, "igs_code" => $code);
+        return M("Igoodsent")->where($condition)
+            ->save(array("timestamp" => venus_current_datetime(), "igo_code" => $igocode));
+    }
+
+    //退货拆分订单修改所属出仓单
+    public function updateInvCodeByIgoCode($code, $invcode)
+    {
+        $condition = array("war_code" => $this->warehousecode, "igo_code" => $code);
+        return M("Igoodsent")->where($condition)
+            ->save(array("timestamp" => venus_current_datetime(), "inv_code" => $invcode));
+    }
+
+    /**
+     * @param $orderCode
+     * @param $spuCode
+     * @return mixed
+     * 通过订单编号和spu编号获取自营出仓批次总条数
+     */
+    public function queryOwnCountByOcodeAndSpuCode($orderCode, $spuCode)
+    {
+        return M("igoodsent")
+            ->alias("igs")
+            ->field("igs_count,igs_bprice")
+            ->join("left join `wms_invoice` inv on inv.inv_code=igs.inv_code")
+            ->where(array("inv.inv_ecode" => $orderCode, "igs.spu_code" => $spuCode, "inv.inv_mark" => "小程序单(自营)"))
+            ->count();
+    }
+
+    /**
+     * @param $orderCode
+     * @param $spuCode
+     * @param $count
+     * @return mixed
+     * 通过订单编号和spu编号获取自营出仓批次列表
+     */
+    public function queryOwnListByOcodeAndSpuCode($orderCode, $spuCode, $count)
+    {
+        return M("igoodsent")
+            ->alias("igs")
+            ->field("igs_count,igs_bprice")
+            ->join("left join `wms_invoice` inv on inv.inv_code=igs.inv_code")
+            ->where(array("inv.inv_ecode" => $orderCode, "igs.spu_code" => $spuCode, "inv.inv_mark" => "小程序单(自营)"))
+            ->limit(0, $count)
+            ->select();
+    }
+
+}

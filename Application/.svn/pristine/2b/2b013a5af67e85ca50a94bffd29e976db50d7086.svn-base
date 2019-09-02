@@ -1,0 +1,165 @@
+<?php
+define('IS_MASTER', true);
+define('APP_DIR', '/home/dev/venus/');
+//define('APP_DIR', '/home/wms/app/');//正式站目录为/home/wms/app/
+define('APP_DEBUG', true);
+define('APP_MODE', 'cli');
+define('APP_PATH', APP_DIR . './Application/');
+define('RUNTIME_PATH', APP_DIR . './Runtime_script/'); // 系统运行时目录
+require APP_DIR . './ThinkPHP/ThinkPHP.php';
+
+use Common\Service\ExcelService;
+use Common\Service\PassportService;
+use Erp\Dao\ShopordersDao;
+use Erp\Dao\ShoporderdetailDao;
+use Erp\Service\PrizeService;
+use Wms\Dao\ReportdownloadDao;
+
+
+//查询所有状态为2的订单
+$orderModel = ShopordersDao::getInstance();
+$detail = ShoporderdetailDao::getInstance();
+$status = 2;
+$datas = $detail->queryBystatus($status);
+if(empty($datas)){
+	echo "暂时还没有订单需要生成";
+	exit;
+}
+$ids = array();
+foreach($datas as $v){
+    array_push($ids, $v['id']);
+}
+$data = $orderModel->querymsgByIds($ids);
+$res = make_pdf($data);
+$excel = get_excel($ids);
+$updateTime = updated_at($ids);
+$url['pdf'] = $res;
+$url['excel'] = $excel;
+if($res && $res){
+    if($status == 3){
+        return array(true, $url, '打印面单成功');
+    }else{
+        //减去库存，添加订单成本
+        venus_db_starttrans();//启动事务
+        $result = $orderModel->updateByCangIds($ids, 3);
+        $insertPdf = insert_datas('面单', $res, 22);
+        $insertExcel = insert_datas('拣货单', $excel, 23);
+        if(!$result || !$insertPdf || !$res || !$insertExcel){
+        	echo '开始-->'.$result.'-->'.$insertExcel.'-->'.$res.'-->'.$insertPdf.'-->结束';
+        	echo '面单下载失败啦';
+            venus_db_rollback();
+            return array(false, '', '面单下载失败');
+        }
+    }  
+} 
+venus_db_commit();   
+return array(true, $url, '打印面单成功');
+
+//将图片转换成PDF
+function make_pdf($arr){
+    $im = new \Imagick();   
+    for( $i=0;$i<count($arr);$i++ ) 
+    { 
+        $auxIMG = new \Imagick(); 
+        $auxIMG->readImage($arr[$i]['logistics_img']);
+        $im->addImage($auxIMG); 
+    }
+    echo 'PDF生成开始----';
+    $name = md5(time());
+    $time = date("Ymd");
+    $nowurl =  '/home/wms/app/Public/files/erp/'.$time;//正式地址//'/home/dev/venus/Public/files/erp/'.$time;
+    if(!is_dir($nowurl)){
+        $a = mkdir($nowurl);
+        if($a){
+        	echo '路径生成成功';
+        }else{
+        	echo '路径生成失败';
+        }
+    }
+    //检测脚本路径是否存在
+    $now = date('H');
+    $fileurl = $nowurl.'/'.$now;
+    echo '脚本存储路径---'.$fileurl;
+    if(!is_dir($fileurl)){
+        $a = mkdir($fileurl);
+        if($a){
+        	echo '路径生成成功';
+        }else{
+        	echo '路径生成失败';
+        }
+    }
+    $fileurl = $fileurl.'/';
+    $url = $fileurl.'/'.$name.'.pdf';
+    $res = $im->writeImages($url, true); 
+    $link = $time.'/'.$now.'/'.$name.'.pdf';//$_SERVER['HTTP_HOST'].'/static/Pdfs/'.$time.'/'.$name.'.pdf';
+    echo '面单路径'.$link;
+    if($res){
+        $im->destroy();
+        $auxIMG->destroy();
+        return $link;//生成的PDF路径
+    }
+}  
+
+//生成面单的excel
+function get_excel($ids){
+	echo 'EXCEL生成中---';
+    $goodsData = ShoporderdetailDao::getInstance()->goodsList($ids);
+    $goodData = array();
+    $fname = "面单对应货品表";
+    $header = array("内部订单编号", "订单号","收货人姓名", "联系手机号", "订单备注"/*, "宝贝标题"*/, "宝贝数量", "货品编号");
+    
+    foreach ($goodsData as $index => $goodsItem) {
+        $goodsList = array(
+            "order_id" => $goodsItem['order_id'],
+            "tradeNum" => ' '.$goodsItem['tradenum'],
+            "buyer_name" => $goodsItem['buyer_name'],
+            "buyer_mobile" => $goodsItem['buyer_mobile'],
+            "seller_message" => $goodsItem['seller_message'],
+            /*//"goods_name" => $goodsItem['goods_name'],
+            "count" => $goodsItem['num'],*/
+            //"merchant_code" => $goodsItem['merchant_code'],
+        );
+        $hands = explode(',',$goodsItem['merchant_code']);
+            //"goods_name" => $goodsItem['goods_name'],
+        $goodsList['count'] = count($hands);
+        foreach($hands as $v){
+           $conditon['id'] = $v;
+           $res = M('handorder')->field('merchant_code')->where($conditon)->find();
+           $goodsList['merchant_code'] .= $res['merchant_code'].',';  
+        }
+        $goodData[$fname][] = array(
+                $goodsList['order_id'],$goodsList['tradeNum'],$goodsList['buyer_name'],$goodsList['buyer_mobile'],$goodsList['seller_message'],/*$goodsList['goods_name'],*/$goodsList['count'],$goodsList['merchant_code']
+            );
+    }
+    $now = date('H');
+    $time = date('Ymd');
+    $url = 'erp/'.$time;
+    $fileName = ExcelService::getInstance()->exportExcel($goodData, $header, 'erp/'.$time.'/'.$now);
+    if ($fileName) {
+        return $time.'/'.$now.'/'.$fileName;
+    } else {
+        echo 'EXCEL生成失败'.$time.'/'.$fileName;
+    }
+}  
+
+//修改更新时间
+function updated_at($ids){
+    $result = ShopordersDao::getInstance()->updatedTime($ids);
+    if(!$result){
+        return array(false, '', '更新订单时间失败');
+    }
+}
+
+//将数据插入表中
+function insert_datas($name, $url, $type){
+	$time = date('Ymd-H');
+	$item = array(
+	    "fname" => $name.'('.$time.')',
+	    "sfname" => $url,
+	    "scatalogue" => 'erp',//文件存放目录
+	    "sdepartments" => $type,//所属部门：1.采购部 2.市场部 3.仓配部 4.财务部 5.品控部 22:erp
+	);
+	$insertFileslog = ReportdownloadDao::getInstance()->insert($item); 
+	return $insertFileslog; 
+}
+

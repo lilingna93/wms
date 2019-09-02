@@ -1,0 +1,599 @@
+<?php
+/**
+ * Created by PhpStorm.
+ * User: lingn
+ * Date: 2018/7/27
+ * Time: 10:59
+ */
+
+namespace Wms\Service;
+
+
+use Common\Service\ExcelService;
+use Common\Service\PassportService;
+use Wms\Dao\GoodsDao;
+use Wms\Dao\GoodstoredDao;
+use Wms\Dao\IgoodsDao;
+use Wms\Dao\IgoodsentDao;
+use Wms\Dao\InvoiceDao;
+use Wms\Dao\SkuDao;
+use Wms\Dao\SpuDao;
+use Wms\Dao\WorkerDao;
+
+class GoodsService
+{
+    public $warCode;
+    public $worcode;
+
+    public function __construct()
+    {
+        $workerData = PassportService::loginUser();
+        if (empty($workerData)) {
+            venus_throw_exception(110);
+        }
+
+        $this->warCode = $workerData["war_code"];
+        $this->worcode = $workerData["wor_code"];
+        $this->worRname = $workerData["wor_rname"];//人员名称
+        $this->warAddress = $workerData["war_address"];//仓库地址
+        $this->warPostal = $workerData["war_postal"];//仓库邮编
+        $this->worPhone = $workerData["wor_phone"];//手机号
+        $this->worbranch = $workerData["wor_branch"];//部门
+//        $this->warCode = $workerData["war_code"] = "WA000001";
+//        $this->worcode = $workerData["wor_code"] = "WO000001";
+//        $this->worRname = $workerData["wor_rname"] = "小明";//人员名称
+//        $this->worPhone = $workerData["wor_phone"] = "13411111111";//手机号
+//        $this->warAddress = $workerData["war_address"] = "北京市朝阳区亮马桥";//仓库地址
+//        $this->warPostal = $workerData["war_postal"] = "100013";//仓库邮编
+    }
+
+    /**
+     * @return array
+     * 库存管理
+     */
+    public function goods_search($param)
+    {
+        $warCode = $this->warCode;
+
+        if (!isset($param)) {
+            $param = $_POST;
+            $pageSize = 100;
+        } else {
+            $pageSize = 1000;
+        }
+        $data = array();
+        $code = $param['data']['code'];
+        $tCode = $param['data']['tCode'];
+        $cgCode = $param['data']['cgCode'];
+        $spName = $param['data']['spName'];
+        $isAllGoods = $param['data']['all'];//1全部带0，2全部不带0，3库存0
+        $pageCurrent = $param['data']['pageCurrent'];//当前页数
+        $clause = array();
+        if (empty($pageCurrent)) {
+            $pageCurrent = 0;
+        }
+        if (!empty($code)) {
+            if(substr($code,0,2)=="SK"){
+                $clause['skucode'] = $code;
+            }elseif(substr($code,0,2)=="SP"){
+                $clause['spucode'] = $code;
+            }else{
+                return array(false, array(), "请输入正确货品编号");
+            }
+
+        }
+        if (!empty($tCode)) {
+            $clause['type'] = $tCode;
+        }
+        if (!empty($cgCode)) {
+            $clause['subtype'] = $cgCode;
+        }
+        if (!empty($spName)) {
+            $clause['%name%'] = $spName;
+        }
+        if (!empty($isAllGoods)) {
+            $clause['seltype'] = $isAllGoods;
+        }
+        $goodsModel = GoodsDao::getInstance($warCode);
+        if (!empty($isAllGoods) && ($isAllGoods == 2 || $isAllGoods == 3)) {
+            $totalCount = $goodsModel->queryCountByCondition($clause);
+            $pageLimit = pageLimit($totalCount, $pageCurrent, $pageSize);
+            $goodsData = $goodsModel->queryListByCondition($clause, $pageLimit['page'], $pageLimit['pSize']);
+        } else {
+            $totalCount = $goodsModel->queryAllCountByCondition($clause);
+            $pageLimit = pageLimit($totalCount, $pageCurrent, $pageSize);
+            $goodsData = $goodsModel->queryAllListByCondition($clause, $pageLimit['page'], $pageLimit['pSize']);
+        }
+        $data = array(
+            "pageCurrent" => $pageCurrent,
+            "pageSize" => $pageLimit['pageSize'],
+            "totalCount" => $totalCount,
+        );
+
+        foreach ($goodsData as $value) {
+//            $spuImg = $value['spu_code'];
+            if (empty($value['spu_img'])) {
+                $spuImg = "_";
+            } else {
+                $spuImg = $value['spu_code'];
+            }
+            $goodsCount = ($value['sku_count'] == intval($value['sku_count'])) ? intval($value['sku_count']) : $value['sku_count'];
+            $data['list'][] = array(
+                "code" => $value['sku_code'],
+                "name" => $value['spu_name'],
+                "norm" => $value['sku_norm'],
+                "count" => $goodsCount,//库存
+                "unit" => $value['sku_unit'],
+                "brand" => $value['spu_brand'],
+                "cunit" => $value['spu_cunit'],
+                "img" => empty($spuImg) ? "_" : $spuImg . ".jpg?_=" . C("SKU_IMG_VERSION"),
+            );
+
+        }
+        $success = true;
+        $message = '';
+        return array($success, $data, $message);
+    }
+
+
+    /**
+     * @return array|bool
+     * 库存管理-批次详情
+     */
+    public function goods_stored()
+    {
+        $warCode = $this->warCode;
+        $data = array();
+        $clause = array();
+        $code = $_POST['data']['code'];
+        $pageCurrent = $_POST['data']['pageCurrent'];//当前页数
+        if (empty($pageCurrent)) {
+            $pageCurrent = 0;
+        }
+        if (empty($code)) {
+            $message = "sku编号不能为空";
+            venus_throw_exception(1, $message);
+            return false;
+        }
+        $goodstoredModel = GoodstoredDao::getInstance($warCode);
+        $goodsModel = GoodsDao::getInstance($warCode);
+
+        $totalCount = $goodstoredModel->queryCountBySkuCode($code);
+        $pageLimit = pageLimit($totalCount, $pageCurrent);
+        $goodstoredData = $goodstoredModel->queryListBySkuCode($code, $pageLimit['page'], $pageLimit['pSize']);
+        $spuData = $goodsModel->queryBySkuCode($code);
+        $goodsCount = ($spuData['sku_count'] == intval($spuData['sku_count'])) ? intval($spuData['sku_count']) : $spuData['sku_count'];
+        $data = array(
+            "pageCurrent" => $pageCurrent,
+            "pageSize" => $pageLimit['pageSize'],
+            "totalCount" => $totalCount,
+            "code" => $spuData['sku_code'],
+            "name" => $spuData['spu_name'],
+            "norm" => $spuData['sku_norm'],
+            "count" => $goodsCount,
+            "unit" => $spuData['sku_unit'],
+            "qgPeriod" => $spuData['qg_period'],//保质期
+        );
+        foreach ($goodstoredData as $value) {
+            $skuInit = ($value['sku_init'] == intval($value['sku_init'])) ? intval($value['sku_init']) : $value['sku_init'];
+            $skuCount = ($value['sku_count'] == intval($value['sku_count'])) ? intval($value['sku_count']) : $value['sku_count'];
+            $data['list'][] = array(
+                "gsCode" => $value['gs_code'],
+                "recCode" => $value['rec_code'],
+                "recCtime" => $value['rec_ctime'],
+                "num" => $value['sku_norm'] . "*" . $skuCount . $value['sku_unit'] . "=" . $skuCount . $value['sku_unit'],
+                "sprice" => bcmul($value['gb_bprice'], $spuData['spu_count'], 2),
+                "init" => $skuInit,
+                "count" => $skuCount,
+                "posCode" => $value['pos_code'],
+                "pdDate" => $value['production_date'],//生产日期
+                "isReturn" => ($value['rec_type'] != 3 && $skuCount > 0) ? true : false
+            );
+        }
+        $success = true;
+        $message = '';
+        return array($success, $data, $message);
+
+    }
+
+    /**
+     * @return array
+     * 导出库存
+     */
+    public function goods_export()
+    {
+        //worbranch：1采购部；2销售部；3仓配部；4运营部；5研发部
+        if ($this->worbranch == 3) {
+            return $this->goods_war_export();
+        } elseif ($this->worbranch == 1) {
+            return $this->goods_purchase_export();
+        } else {
+            return array(false, array(), "无下载权限");
+        }
+    }
+
+    /**
+     * @return array
+     * 导出库存
+     */
+    public function goods_purchase_export()
+    {
+        $warCode = $this->warCode;
+        $isAllGoods = $_POST['data']['all'];//1全部带0，2全部不带0，3库存0
+        $data = array();
+        $sheetName = venus_unique_code("JM");
+        $skuModel = SkuDao::getInstance($warCode);
+        $goodstoredModel = GoodstoredDao::getInstance($warCode);
+        if (!empty($isAllGoods) && $isAllGoods != 1) {
+            $clause['seltype'] = $isAllGoods;
+        }
+        //无库存货品数据
+        if (empty($isAllGoods) || $isAllGoods == 3 || $isAllGoods == 1) {
+            $goodsDataOne = $skuModel->queryNotGoodsListByCondition();
+        }
+        $goodsData = $skuModel->queryGoodsListByCondition($clause);
+        $skuCodeArr = array();
+        foreach ($goodsData as $goodsDatum) {
+            if ($goodsDatum['goods_count'] > 0) {
+                $skuCodeArr[] = $goodsDatum['sku_code'];
+            }
+        }
+
+        if (isset($goodsDataOne)) {
+            foreach ($goodsDataOne as $goodsDatum) {
+                $goodsData[] = $goodsDatum;
+            }
+        }
+//        $bpriceData = array();
+//        $clause = array(
+//            "skucode" => array("in", $skuCodeArr),
+//            "count" => array("GT", 0)
+//        );
+//        $count = $goodstoredModel->queryCountByCondition($clause);
+//        $gsData = $goodstoredModel->queryListByCondition($clause, 0, $count);
+//        if (!empty($gsData)) {
+//            foreach ($gsData as $gsDatum) {
+//                if ($gsDatum['gs_count'] == 0) continue;
+//                $skuCode = $gsDatum['sku_code'];
+//                $bpriceData[$skuCode] = bcadd($bpriceData[$skuCode], bcmul($gsDatum['gb_bprice'], $gsDatum['gs_count'], 4), 4);
+//            }
+//        }
+        $clause = array(
+            "skucode" => array("in", $skuCodeArr),
+            "count" => array("GT", 0)
+        );
+
+        $gsData=$goodstoredModel->queryBpriceListByCondition($clause,0,1000000);
+        $bpriceData=array();
+        foreach ($gsData as $gsDatum) {
+            $bpriceData[$gsDatum['sku_code']]=$gsDatum['bprice'];
+        }
+        $letterCount = 0;
+        $skuData = array();
+        foreach ($goodsData as $value) {
+            if (!empty($value['goods_code'])) {
+                $goodsSkuCount = $value['sku_count'];
+            } else {
+                $goodsSkuCount = 0;
+            }
+            $goodsCount = ($goodsSkuCount == intval($goodsSkuCount)) ? intval($goodsSkuCount) : $goodsSkuCount;
+            $goodsData = array(
+                "code" => $value['sku_code'],
+                "name" => $value['spu_name'],
+                "type" => venus_spu_type_name($value['spu_type']),
+                "subType" => venus_spu_catalog_name($value['spu_subtype']),
+                "brand" => $value['spu_brand'],
+                "supCode" => $value['sup_code'],
+                "supName" => $value['sup_name'],
+                "norm" => $value['sku_norm'],
+                "mark" => $value['spu_mark'],
+                "unit" => $value['sku_unit'],
+                "count" => $goodsCount,//库存
+                "realBprice" => array_key_exists($value['sku_code'], $bpriceData) ? $bpriceData[$value['sku_code']] : 0,
+                "ogcount" => "",
+                "bprice" => bcmul($value['spu_bprice'], $value['spu_count'], 2),
+            );
+            $letterCount = count($goodsData);
+            $data[$value['sup_code']][] = $goodsData;
+            $skuData[$value['sku_code']] = venus_spu_status_desc($value['sku_status']);
+        }
+        $letters = array();
+        for ($letter = 0; $letter < $letterCount; $letter++) {
+            $letters[] = chr(65 + $letter);
+        }
+
+        $excelData[$sheetName] = array();
+        //统计30天销量文件路径
+        $dayToFilePath = C("FILE_SAVE_PATH") . "../spufiles/spusalesvolume.txt";
+        if (!file_exists($dayToFilePath)) {
+            $success = false;
+            $data = "";
+            $message = "统计30天销量文件不存在";
+            return array($success, $data, $message);
+        }
+        $dayToIgoodsData = json_decode(file_get_contents($dayToFilePath), true);
+        //统计60天销量文件路径
+        $twoMonthToFilePath = C("FILE_SAVE_PATH") . "../spufiles/spusalesvolumesixty.txt";
+        if (!file_exists($twoMonthToFilePath)) {
+            $success = false;
+            $data = "";
+            $message = "统计60天销量文件不存在";
+            return array($success, $data, $message);
+        }
+        $twoMonthToIgoodsData = json_decode(file_get_contents($twoMonthToFilePath), true);
+
+        $line = array();
+        foreach ($data as $supCode => $dataList)
+            foreach ($dataList as $datum) {
+                $goodsExcelData = array_values($datum);
+                $line[] = $goodsExcelData;
+            }
+        $countLineNum = count($line) + 2;
+        for ($lineNum = 2; $lineNum < $countLineNum; $lineNum++) {
+            for ($rows = 0; $rows < count($letters); $rows++) {
+                $num = $letters[$rows] . $lineNum;
+                $excelData[$sheetName][$num] = $line[$lineNum - 2][$rows];
+                if ($rows == count($letters) - 1) {
+                    $totalOrderLettes = "P" . $lineNum;//字典总价
+                    $bpriceOrderLettes = "N" . $lineNum;//字典单价
+                    $countOrderLettes = "K" . $lineNum;//字典数量
+                    $excelData[$sheetName][$totalOrderLettes] = "=" . $bpriceOrderLettes . "*" . $countOrderLettes;
+                    $totalLettes = "Q" . $lineNum;//实际总价
+                    $bpriceLettes = "O" . $lineNum;//采购单价
+                    $countLettes = "M" . $lineNum;//采购数量
+                    $excelData[$sheetName][$totalLettes] = "=" . $bpriceLettes . "*" . $countLettes;
+                    $skuCodeLettes = "A" . $lineNum;//货品编号
+
+//                    $dayToIgoods = "T" . $lineNum;//过去30天销量
+                    $dayToIgoods = "U" . $lineNum;//过去30天销量
+                    $skuCode = $excelData[$sheetName][$skuCodeLettes];
+                    $excelData[$sheetName][$dayToIgoods] = $dayToIgoodsData[$skuCode];
+
+//                    $twoMonthToIgoods = "U" . $lineNum;//过去60天销量
+                    $twoMonthToIgoods = "V" . $lineNum;//过去60天销量
+                    $excelData[$sheetName][$twoMonthToIgoods] = $twoMonthToIgoodsData[$skuCode];
+
+//                    $statusLettes = "S" . $lineNum;//货品状态
+                    $statusLettes = "T" . $lineNum;//货品状态
+                    $excelData[$sheetName][$statusLettes] = $skuData[$skuCode];
+                }
+            }
+        }
+
+        $fileName = ExcelService::getInstance()->exportExcelByTemplate($excelData, "006");
+        if ($fileName) {
+            $success = true;
+            $data = array(
+                "fname" => $fileName,
+                "sname" => "采购单.xlsx",
+                "tname" => "006"
+            );
+            $message = "";
+        } else {
+            $success = false;
+            $data = "";
+            $message = "下载失败";
+        }
+        return array($success, $data, $message);
+    }
+
+
+    public function goods_war_export()
+    {
+        $warCode = $this->warCode;
+        $isAllGoods = $_POST['data']['all'];//1全部带0，2全部不带0，3库存0
+        $data = array();
+        $sheetName = venus_unique_code("GM");
+        $skuModel = SkuDao::getInstance($warCode);
+        if (!empty($isAllGoods) && $isAllGoods != 1) {
+            $clause['seltype'] = $isAllGoods;
+        }
+
+        //无库存货品数据
+        if (empty($isAllGoods) || $isAllGoods == 3 || $isAllGoods == 1) {
+            $goodsDataOne = $skuModel->queryNotGoodsListByCondition();
+        }
+        $goodsData = $skuModel->queryGoodsListByCondition($clause);
+        if (isset($goodsDataOne)) {
+            foreach ($goodsDataOne as $goodsDatum) {
+                $goodsData[] = $goodsDatum;
+            }
+        }
+        $letterCount = 0;
+
+        foreach ($goodsData as $value) {
+            if (!empty($value['goods_code'])) {
+                $goodsSkuCount = $value['sku_count'];
+            } else {
+                $goodsSkuCount = 0;
+            }
+            $goodsCount = ($goodsSkuCount == intval($goodsSkuCount)) ? intval($goodsSkuCount) : $goodsSkuCount;
+            $goodsData = array(
+                "code" => $value['sku_code'],
+                "name" => $value['spu_name'],
+                "type" => venus_spu_type_name($value['spu_type']),
+                "subType" => venus_spu_catalog_name($value['spu_subtype']),
+                "brand" => $value['spu_brand'],
+                "supCode" => $value['sup_code'],
+                "supName" => $value['sup_name'],
+                "norm" => $value['sku_norm'],
+                "mark" => $value['spu_mark'],
+                "unit" => $value['sku_unit'],
+                "count" => $goodsCount,//库存
+                "status" => venus_spu_status_desc($value['sku_status'])
+            );
+            $letterCount = count($goodsData);
+            $data['list'][] = $goodsData;
+        }
+        $letters = array();
+        for ($letter = 0; $letter < $letterCount; $letter++) {
+            $letters[] = chr(65 + $letter);
+        }
+
+        $excelData[$sheetName] = array();
+        $line = array();
+        foreach ($data['list'] as $datum) {
+            $goodsExcelData = array_values($datum);
+            $line[] = $goodsExcelData;
+        }
+        $countLineNum = count($line) + 2;
+        for ($lineNum = 2; $lineNum < $countLineNum; $lineNum++) {
+            for ($rows = 0; $rows < count($letters); $rows++) {
+                $num = $letters[$rows] . $lineNum;
+                $excelData[$sheetName][$num] = $line[$lineNum - 2][$rows];
+            }
+        }
+        $fileName = ExcelService::getInstance()->exportExcelByTemplate($excelData, "009");
+        if ($fileName) {
+            $success = true;
+            $data = array(
+                "fname" => $fileName,
+                "sname" => "库存详情.xlsx",
+                "tname" => "009"
+            );
+            $message = "";
+        } else {
+            $success = false;
+            $data = "";
+            $message = "下载失败";
+        }
+        return array($success, $data, $message);
+    }
+
+    //选择批次退货
+    public function goods_return()
+    {
+        $warCode = $this->warCode;
+        $gsCode = $_POST['data']['gsCode'];
+        $receiver = $_POST['data']['receiver'];
+        $returnmark = $_POST['data']['returnmark'];
+        $mark = $_POST['data']['mark'];
+        $skCount = $_POST['data']['skCount'];
+        if (empty($gsCode)) {
+            $message = "批次编号不能为空";
+            venus_throw_exception(1, $message);
+            return false;
+        }
+        if (empty($receiver)) {
+            $message = "收件人不能为空";
+            venus_throw_exception(1, $message);
+            return false;
+        }
+        if (empty($returnmark)) {
+            $message = "退货原因不能为空";
+            venus_throw_exception(1, $message);
+            return false;
+        }
+        $gsModel = GoodstoredDao::getInstance($warCode);
+        $invModel = InvoiceDao::getInstance($warCode);
+        $igoModel = IgoodsDao::getInstance($warCode);
+        $goodsModel = GoodsDao::getInstance($warCode);
+        $igsModel = IgoodsentDao::getInstance($warCode);
+        $gsInfo = $gsModel->queryByCode($gsCode);
+        if ($gsInfo['sku_count'] < $skCount) {
+            $success = false;
+            $data = "";
+            $message = "此批次退货数量最多为" . $gsInfo['sku_count'];
+        } else {
+            venus_db_starttrans();
+            $isSuccess = true;
+            $addInvData = array(
+                'receiver' => $receiver,
+                'type' => 6,
+                'mark' => empty($mark) ? "仓内手工批次退货" : $mark . "(仓内手工批次退货)",
+                'returnmark' => $returnmark,
+                'worcode' => $this->worcode,
+                'ctime' => venus_current_datetime(),
+                'status' => 5,
+            );
+            $invCode = $invModel->insert($addInvData);
+
+            $isSuccess = $isSuccess && !empty($invCode);
+            $goodsData = $goodsModel->queryBySkuCode($gsInfo['sku_code']);
+            $addIgoData = array(
+                'skucode' => $gsInfo['sku_code'],
+                'skucount' => $skCount,
+                'spucode' => $gsInfo['spu_code'],
+                'count' => bcmul($skCount, $gsInfo['spu_count'], 2),
+                'sprice' => $gsInfo['spu_sprice'],
+                'pprice' => empty($gsInfo['profit_percent']) ? 0 : $gsInfo['profit_percent'],
+                'percent' => empty($gsInfo['spu_percent']) ? 0 : $gsInfo['spu_percent'],
+                "goodscode" => $goodsData['goods_code'],
+                "invcode" => $invCode,
+            );
+            $igoCode = $igoModel->insert($addIgoData);
+            $isSuccess = $isSuccess && !empty($igoCode);
+            $addIgsData = array(
+                'skucode' => $gsInfo['sku_code'],
+                'skucount' => $skCount,
+                'spucode' => $gsInfo['spu_code'],
+                'count' => bcmul($skCount, $gsInfo['spu_count'], 2),
+                'bprice' => $gsInfo['gb_bprice'],
+                'gscode' => $gsInfo['gs_code'],
+                'igocode' => $igoCode,
+                'invcode' => $invCode,
+            );
+            $igsCode = $igsModel->insert($addIgsData);
+            $isSuccess = $isSuccess && !empty($igsCode);
+            $gsCount = bcsub($gsInfo['gs_count'], $addIgsData['count'], 2);
+            $gsSkucount = bcsub($gsInfo['sku_count'], $addIgsData['skucount'], 2);
+            $isSuccess = $isSuccess && $gsModel->updateCountAndSkuCountByCode($gsInfo['gs_code'], $gsCount, $gsSkucount);
+            $count = bcsub($goodsData['goods_count'], $addIgsData['count'], 2);
+            $skucount = bcsub($goodsData['sku_count'], $addIgsData['skucount'], 2);
+            $isSuccess = $isSuccess && $goodsModel->updateCountByCode($goodsData['goods_code'], $goodsData['goods_count'], $count, $skucount);
+            if ($isSuccess) {
+                venus_db_commit();
+                $success = true;
+                $data = "";
+                $message = "此批次退货成功";
+            } else {
+                venus_db_rollback();
+                $success = false;
+                $data = "";
+                $message = "此批次退货失败，请重新退货";
+            }
+        }
+        return array($success, $data, $message);
+    }
+
+    /**
+     * @param $param
+     * @return array
+     * 批次出仓详情
+     */
+    public function goods_igoodsent($param)
+    {
+        $warCode = $this->warCode;
+
+        if (!isset($param)) {
+            $param = $_POST;
+        }
+
+        $invModel = InvoiceDao::getInstance($warCode);
+
+        $gsCode = $param['data']['gsCode'];
+        if (empty($gsCode)) return array(false, array(), "库存批次编号不能为空");
+        $clause = array(
+            "gscode" => $gsCode
+        );
+        $igoodsentData = IgoodsentDao::getInstance($warCode)->queryListByCondition($clause, 0, 1000);
+        $data = array();
+        foreach ($igoodsentData as $igoodsentDatum) {
+            $data['list'][] = array(
+                "igsCode" => $igoodsentDatum['igs_code'],
+                "igsSkuCount" => $igoodsentDatum['sku_count'],
+                "invCode" => $igoodsentDatum['inv_code'],
+                "invCtime" => $igoodsentDatum['inv_ctime'],
+                "invStatus" => $igoodsentDatum['inv_status'],
+                "invStatMsg" => venus_invoice_status_desc($igoodsentDatum['inv_status']),//出仓单状态信息
+                "invEcode" => $igoodsentDatum['inv_ecode'],//订单编号
+                "invUcode" => $igoodsentDatum['wor_code'],//下单人
+                "invUname" => $igoodsentDatum['wor_rname'],//下单人名称
+                "invReceiver" => $igoodsentDatum['inv_receiver'],//客户名称
+                "invMark" => $igoodsentDatum['inv_mark'],
+                "invType" => venus_invoice_type_desc($igoodsentDatum['inv_type']),//出仓单类型,
+            );
+        }
+        return array(true, $data, "");
+    }
+}

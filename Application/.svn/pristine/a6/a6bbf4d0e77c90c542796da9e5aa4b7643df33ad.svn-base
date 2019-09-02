@@ -1,0 +1,443 @@
+<?php
+
+namespace Wms\Service;
+
+use Common\Service\ExcelService;
+use Common\Service\PassportService;
+use Wms\Dao\OrderDao;
+use Wms\Dao\SpuDao;
+use Wms\Dao\ProfitDao;
+use Wms\Dao\SupplierDao;
+use Wms\Service\SkuService;
+
+class SpuService
+{
+
+    public $waCode;
+
+    function __construct()
+    {
+        $workerData = PassportService::getInstance()->loginUser();
+        if (empty($workerData)) {
+            venus_throw_exception(110);
+        }
+        $this->waCode = $workerData["war_code"];
+    }
+
+    //1.SPU搜索
+    public function spu_search()
+    {
+
+        $spName = $_POST['data']['spName'];
+        $spType = $_POST['data']['spType'];
+        $spSubtype = $_POST['data']['spSubtype'];
+        $exwCode = $_POST['data']['exwCode'];//客户仓库编码
+        $pageCurrent = $_POST['data']['pageCurrent'];//当前页码
+        $pageSize = 100;//当前页面总条数
+
+        if (!empty($spName) && preg_match("/^[a-z]/i", $spName)) {
+            $condition['abname'] = $spName;
+        }
+        if (!empty($spName) && !preg_match("/^[a-z]/i", $spName)) {//SPU名称
+            $condition['%name%'] = $spName;
+        }
+
+        if (!empty($spType)) {//一级分类编号
+            $condition['type'] = $spType;
+        }
+
+        if (!empty($spSubtype)) {//二级分类编号
+            $condition['subtype'] = $spSubtype;
+        }
+
+        if (!empty($exwCode)) {//客户仓库
+            $condition['exwarcode'] = $exwCode;
+        }
+
+        //当前页码
+        if (empty($pageCurrent)) {
+            $pageCurrent = 0;
+        }
+
+        $SpuDao = SpuDao::getInstance($this->waCode);
+        $totalCount = $SpuDao->queryCountByCondition($condition);//获取指定条件的总条数
+        $pageLimit = pageLimit($totalCount, $pageCurrent);
+        $spuDataList = $SpuDao->queryListByCondition($condition, $pageLimit['page'], $pageLimit['pSize']);
+
+        if (empty($spuDataList)) {
+            $spuList = array(
+                "pageCurrent" => 0,
+                "pageSize" => 100,
+                "totalCount" => 0
+            );
+            $spuList["list"] = array();
+        } else {
+            $spuList = array(
+                "pageCurrent" => $pageCurrent,
+                "pageSize" => $pageSize,
+                "totalCount" => $totalCount
+            );
+            foreach ($spuDataList as $index => $spuItem) {
+                if (!empty($spuItem['sku_mark'])) {
+                    $spMark = "(" . $spuItem['sku_mark'] . ")";
+                }
+//                $cltProfit = round(bcmul($val['spu_sprice'], $val['pro_percent'], 3), 2);//客户利润价
+
+                $spuList["list"][$index] = array(
+                    "spCode" => $spuItem['spu_code'],//编号
+                    "spName" => $spuItem['spu_name'] . $spMark,//品名
+                    "spBrand" => $spuItem['spu_brand'],//品牌
+                    "spUnit" => $spuItem['spu_unit'],//单位
+                    "spNorm" => $spuItem['spu_norm'],//单位
+                    "spBprice" => $spuItem['spu_bprice'],//内部采购价
+                    "spSprice" => $spuItem['spu_sprice'],//内部销售价
+                    "cltPercent" => $spuItem['pro_percent'] ?: "",//客户利润率
+                    "cltProfit" => $spuItem['profit_price'] ?: "",//客户利润价
+                    "cltSprice" => $spuItem['spu_sprice'] + $spuItem['profit_price'],//客户销售价
+                    "supCode" => $spuItem['sup_code'] ?: "",//供货商编码
+                    "supName" => $spuItem['sup_name'] ?: ""//供货商名称
+                );
+            }
+        }
+        return array(true, $spuList, "");
+    }
+
+    //2.导入客户利润率
+    public function percent_import()
+    {
+        $datas = ExcelService::getInstance()->upload("file");
+        $dicts = array(
+            "B" => "spuCode",//SPU编号
+            "U" => "profitPrice",//利润价
+        );
+
+        $proList = array();
+        foreach ($datas as $sheetName => $list) {
+            unset($list[0]);
+            $proList = array_merge($proList, $list);
+        }
+
+        venus_db_starttrans();//启动事务
+        $result = true;
+        foreach ($proList as $index => $proItem) {
+            $proData = array();
+            foreach ($dicts as $col => $key) {
+                $proData[$key] = isset($proItem[$col]) ? $proItem[$col] : "";
+            }
+
+            if (trim($proData['spuCode']) == '' || trim($proData['profitPrice']) == '') {
+                if (trim($proData['spuCode']) == '' && trim($proData['profitPrice']) == '') {
+                    continue;
+                } else {
+                    if (trim($proData['spuCode']) == '') {
+                        venus_db_rollback();
+                        venus_throw_exception(1, "货品编号不能为空");
+                        return false;
+                    }
+
+                    if (trim($proData['profitPrice']) == '') {
+                        venus_db_rollback();
+                        venus_throw_exception(1, "利润价不能为空");
+                        return false;
+                    }
+                }
+            } else {
+                $result = $result && SpuDao::GetInstance($this->waCode)->updateProfitByCode($proData['spuCode'], $proData['profitPrice']);
+            }
+        }
+        if ($result) {
+            venus_db_commit();
+            $SkuService = new SkuService();
+            $SkuService->release_latestsku();
+            $success = true;
+            $message = "导入客户利润率成功";
+
+        } else {
+            venus_db_rollback();
+            $success = false;
+            $message = "导入客户利润率失败";
+        }
+        return array($success, "", $message);
+    }
+
+    //3.SPU导入内部销售价
+    public function sprice_import()
+    {
+
+        $datas = ExcelService::getInstance()->upload("file");
+        var_dump($datas);
+        exit;
+        $dicts = array(
+            "B" => "spuCode",//spu品类编号
+            "R" => "spuSprice",//销售价
+        );
+
+        $spuList = array();
+        foreach ($datas as $sheetName => $list) {
+            unset($list[0]);
+            $spuList = array_merge($spuList, $list);
+        }
+
+        venus_db_starttrans();//启动事务
+        $result = true;
+        foreach ($spuList as $index => $spuItem) {
+            $spuData = array();
+            foreach ($dicts as $col => $key) {
+                $spuData[$key] = isset($spuItem[$col]) ? $spuItem[$col] : "";
+            }
+
+            if (trim($spuData['spuCode']) == '' || trim($spuData['spuSprice']) == '') {
+                if (trim($spuData['spuCode']) == '' && trim($spuData['spuSprice']) == '') {
+                    continue;
+                } else {
+                    if (trim($spuData['spuCode']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "货品编号不能为空");
+                        return false;
+                    }
+
+                    if (trim($spuData['spuSprice']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "销售价不能为空");
+                        return false;
+                    }
+                }
+            } else {
+                $result = SpuDao::getInstance($this->waCode)->updateSpriceCodeByCode($spuData['spuCode'], $spuData['spuSprice']);
+                var_dump($result);
+                exit;
+            }
+        }
+        exit;
+        if ($result) {
+            venus_db_commit();
+            $SkuService = new SkuService();
+            $SkuService->release_latestsku();
+            $success = true;
+            $message = "导入内部销售价成功";
+        } else {
+            venus_db_rollback();
+            $success = false;
+            $message = "导入内部销售价失败";
+        }
+        return array($success, "", $message);
+    }
+
+    //4.SPU导入内部采购价
+    public function bprice_import()
+    {
+//        return array(false, "", "<span style='font-size:40px;color: brown'>该功能暂不开放！</span>");
+        $datas = ExcelService::getInstance()->upload("file");
+        $dicts = array(
+            "B" => "spuCode",//spu品类编号
+            "Q" => "spuBprice",//采购价
+        );
+
+        $spuList = array();
+        foreach ($datas as $sheetName => $list) {
+            unset($list[0]);
+            $spuList = array_merge($spuList, $list);
+        }
+
+        venus_db_starttrans();//启动事务
+        $result = true;
+        foreach ($spuList as $index => $spuItem) {
+            $spuData = array();
+            foreach ($dicts as $col => $key) {
+                $spuData[$key] = isset($spuItem[$col]) ? $spuItem[$col] : "";
+            }
+
+            if (trim($spuData['spuCode']) == '' || trim($spuData['spuBprice']) == '') {
+                if (trim($spuData['spuCode']) == '' && trim($spuData['spuBprice']) == '') {
+                    continue;
+                } else {
+                    if (trim($spuData['spuCode']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "货品编号不能为空");
+                        return false;
+                    }
+
+                    if (trim($spuData['spuBprice']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "采购价不能为空");
+                        return false;
+                    }
+                }
+            } else {
+                $result = $result && SpuDao::getInstance($this->waCode)->updateBpriceCodeByCode($spuData['spuCode'], $spuData['spuBprice']);
+            }
+        }
+        if ($result) {
+            venus_db_commit();
+            $SkuService = new SkuService();
+            $SkuService->release_latestsku();
+            $success = true;
+            $message = "导入内部采购价成功";
+
+        } else {
+            venus_db_rollback();
+            $success = false;
+            $message = "导入内部采购价失败";
+        }
+        return array($success, "", $message);
+    }
+
+    //5.SPU导入供货商设置
+    public function supplier_import()
+    {
+
+        $datas = ExcelService::getInstance()->upload("file");
+        $dicts = array(
+            "B" => "spuCode",//spu品类编号
+            "S" => "supCode"//供货商编号
+        );
+
+        $supList = array();
+        foreach ($datas as $sheetName => $list) {
+            unset($list[0]);
+            $supList = array_merge($supList, $list);
+        }
+
+        venus_db_starttrans();//启动事务
+        $result = true;
+        foreach ($supList as $index => $supItem) {
+            $supData = array();
+            foreach ($dicts as $col => $key) {
+                $supData[$key] = isset($supItem[$col]) ? $supItem[$col] : "";
+            }
+
+            if (trim($supData['spuCode']) == '' || trim($supData['supCode']) == '') {
+                if (trim($supData['spuCode']) == '' && trim($supData['supCode']) == '') {
+                    continue;
+                } else {
+                    if (trim($supData['spuCode']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "货品编号不能为空");
+                        return false;
+                    }
+
+                    if (trim($supData['supCode']) == '') {
+                        venus_db_rollback();//回滚事务
+                        venus_throw_exception(1, "供货商不能为空");
+                        return false;
+                    }
+                }
+            } else {
+                $condition['supcode'] = $supData['supCode'];
+                $supDataList = SupplierDao::getInstance($this->waCode)->queryListByCondition($condition);
+                $supType = $supDataList[0]['sup_type'];
+                if ($supType == 1) {//自有供应商1.自有供应商 2.非自有供货商
+                    $isSelfsupport = 1;
+                } else {
+                    $isSelfsupport = 2;
+                }
+                $result = $result && SpuDao::getInstance($this->waCode)->updateSupCodeAndIsSelfsupportByCode($supData['spuCode'], $supData['supCode'], $isSelfsupport);
+            }
+        }
+        if ($result) {
+            venus_db_commit();
+            $success = true;
+            $message = "导入供货商成功";
+        } else {
+            venus_db_rollback();
+            $success = false;
+            $message = "导入供货商失败";
+        }
+        return array($success, "", $message);
+    }
+
+    //6下载全部SPU数据
+    public function spu_export()
+    {
+        $cond['skStatus'] = 'all';
+        $spuDataList = SpuDao::getInstance()->queryAllList($cond);
+        $spuBprice = array();
+        $fname = "SPU全部数据";
+        $header = array("SKU编号", "SPU编号", "一级分类", "一级名称", "二级分类", "二级名称", "仓储方式", "仓储方式名称", "品名", "品牌", "产地", "SPU备注(小程序显示名称、箱规)", "图片", "可计算最小单位", "SPU规格", "规格单位", '内部采购价', "内部销售价", "供货商编号", "客户编号", "客户利润价", "SKU规格（小程序售卖规格）", "单位", "所含标准货品数量", "备注", "货品状态", "采购价是否更新", "时间");//
+        foreach ($spuDataList as $index => $spuItem) {
+
+            if ($spuItem['sku_status'] == 1) {
+                $skStatus = "上线";
+            } else {
+                $skStatus = "下线";
+            }
+
+            $cond = array(
+                "skCode" => $spuItem['sku_code'],
+                "time" => $spuItem['timestamp'],
+            );
+            $goodsbatchList = SpuDao::getInstance()->queryBySkCodeAndTimestamp($cond);
+            if (!empty($goodsbatchList)) {
+                $gBprice1 = $goodsbatchList[0]['gb_bprice'];
+                $gBprice2 = $goodsbatchList[1]['gb_bprice'];
+                if (!empty($goodsbatchList[0]) && !empty($goodsbatchList[1])) {
+                    if ($gBprice1 !== $gBprice2) {
+                        $isUpBprice = 1;
+                    } else {
+                        $isUpBprice = '';
+                    }
+                } else if (empty($goodsbatchList[0]) || empty($goodsbatchList[1])) {
+                    $isUpBprice = '';
+                } else {
+                    $isUpBprice = '';
+                }
+            } else {
+                $isUpBprice = '';
+            }
+
+            $spuList = array(
+                "skCode" => $spuItem['sku_code'],
+                "spCode" => $spuItem['spu_code'],
+                "spType" => $spuItem['spu_type'],
+                "spuSubtype" => $spuItem['spu_subtype'],
+                "spTgtype" => $spuItem['spu_storetype'],
+                "spName" => $spuItem['spu_name'],
+                "spBrand" => $spuItem['spu_brand'],
+                "spFrom" => $spuItem['spu_from'],
+                "spMark" => $spuItem['spu_mark'],
+                "spNorm" => $spuItem['spu_norm'],
+                "spUnit" => $spuItem['spu_unit'],
+                "spImg" => $spuItem['spu_img'],
+                "spCunit" => $spuItem['spu_cunit'],
+                "spBprice" => $spuItem['spu_bprice'],
+                "spSprice" => $spuItem['spu_sprice'],
+                "profitPrice" => $spuItem['profit_price'],
+                "supCode" => $spuItem['sup_code'],
+                "skNorm" => $spuItem['sku_norm'],
+                "skUnit" => $spuItem['sku_unit'],
+                "spCount" => $spuItem['spu_count'],
+                "skMark" => $spuItem['sku_mark'],
+                "skStatus" => $skStatus,
+                "isUpBprice" => $isUpBprice,
+                "timeStamp" => $spuItem['timestamp'],
+            );
+
+            $spuBprice[$fname][] = array(
+                $spuList['skCode'], $spuList['spCode'], $spuList['spType'], venus_spu_type_name($spuList['spType']),
+                $spuList['spuSubtype'],
+                venus_spu_catalog_name($spuList['spuSubtype']), $spuList['spTgtype'],
+                venus_spu_storage_desc($spuList['spTgtype']), $spuList['spName'],
+                $spuList['spBrand'], $spuList['spFrom'], $spuList['spMark'], $spuList['spImg'], $spuList['spCunit'],
+                $spuList['spNorm'], $spuList['spUnit'], $spuList['spBprice'], $spuList['spSprice'],
+                $spuList['supCode'], '', $spuList['profitPrice'], $spuList['skNorm'], $spuList['skUnit'], $spuList['spCount'], $spuList['skMark'], $spuList['skStatus'], $spuList['isUpBprice'], $spuList['timeStamp']);//
+        }
+
+        $fileName = ExcelService::getInstance()->exportExcel($spuBprice, $header, "001");
+
+        if ($fileName) {
+            $success = true;
+            $data = $fileName;
+            $message = "";
+            return array($success, $data, $message);
+        } else {
+            $success = false;
+            $data = "";
+            $message = "下载失败";
+        }
+        return array($success, $data, $message);
+    }
+
+}
+
+
+

@@ -1,0 +1,237 @@
+<?php
+/**
+ * Created by PhpStorm.
+ * User: lilingna
+ * Date: 2019/4/10
+ * Time: 11:38
+ * 导出库存
+ */
+
+ini_set('memory_limit', '256M');
+define('APP_DIR', dirname(__FILE__) . '/../../../../../');
+//define('APP_DIR', '/home/dev/venus/');
+//define('APP_DIR', '/home/wms/app/');//正式站目录为/home/wms/app/
+define('APP_DEBUG', true);
+define('APP_MODE', 'cli');
+define('APP_PATH', APP_DIR . './Application/');
+define('RUNTIME_PATH', APP_DIR . './Runtime_script/'); // 系统运行时目录
+require APP_DIR . './ThinkPHP/ThinkPHP.php';
+vendor("PHPExcel");
+echo venus_current_datetime() . PHP_EOL;
+//$filePath = "spudata.20181226.xlsx";
+//$exportFilePath = "spudata.20181226.result.xlsx";
+//$excelReader = PHPExcel_IOFactory::createReader('Excel2007');
+//$excelFile = $excelReader->load($filePath);
+$excelReader = PHPExcel_IOFactory::createReader('Excel2007');
+$excelFile = new PHPExcel();
+$excelFile->setActiveSheetIndex(0);
+$excelSheet = $excelFile->getActiveSheet();
+//$list = M("sku")->limit(10000)->fetchSql(false)->select();
+//$skucodes = array_column($list, "sku_code");
+$skucodes = array("SK0000276","SK0000124");
+$line = 0;
+$skucount = 0;
+foreach ($skucodes as $skucode) {
+    $list = M("goods")->where(array("sku_code" => $skucode))->fetchSql(false)->select();
+    if (empty($list)) continue;
+    $skucount++;
+    exportGoodbatchData($skucode, $excelSheet);
+    exportGoodstoredData($skucode, $excelSheet);
+    exportGoodsData($skucode, $excelSheet);
+    exportIgoodsData($skucode, $excelSheet);
+    exportIgoodsentData($skucode, $excelSheet);
+    exportOrderGoodsData($skucode, $excelSheet);
+    $line++;
+    $excelSheet->setCellValue("A{$line}", "------------------------------------------------------------------------------------------------------------");
+    $excelSheet->setCellValue("D{$line}", "------------------------------------------------------------------------------------------------------------");
+}
+echo "SUM:{$skucount}";
+$excelWriter = PHPExcel_IOFactory::createWriter($excelFile, 'Excel2007');
+$excelWriter->save("./tool/goods/goodsskudata0603.online.xlsx");
+exit;
+
+function exportGoodbatchData($skucode, $excelSheet)
+{
+    global $line;
+    $line++;
+    $excelSheet->setCellValue("A{$line}", "GoodsBatch");
+    $line++;
+    $list = M("goodsbatch")->where(array("sku_code" => $skucode))->fetchSql(false)->select();
+    foreach ($list as $data) {
+        $excelSheet->setCellValue("A{$line}", $data["gb_code"]);
+        $excelSheet->setCellValue("B{$line}", $data["sku_count"]);
+        $excelSheet->setCellValue("C{$line}", $data["gb_count"]);
+        $excelSheet->setCellValue("D{$line}", $data["sup_code"]);
+        $excelSheet->setCellValue("E{$line}", $data["war_code"]);
+        $excelSheet->setCellValue("F{$line}", $data["gb_ctime"]);
+        $excelSheet->setCellValue("G{$line}", $data["rec_code"]);
+
+        $excelSheet->setCellValue("H{$line}", M("receipt")->where(array("rec_code" => $data["rec_code"]))->getField("rec_mark"));
+
+        $excelSheet->setCellValue("M{$line}", $data["gb_bprice"]);
+        $line++;
+    }
+}
+
+function exportGoodstoredData($skucode, $excelSheet)
+{
+    global $line;
+    $line++;
+    $excelSheet->setCellValue("A{$line}", "GoodsStored");
+    $line++;
+    $list = M("goodstored")->where(array("sku_code" => $skucode))->fetchSql(false)->select();
+    foreach ($list as $data) {
+        $excelSheet->setCellValue("A{$line}", $data["gs_code"]);
+        $excelSheet->setCellValue("B{$line}", $data["sku_init"]);
+        $excelSheet->setCellValue("C{$line}", $data["gs_init"]);
+        $excelSheet->setCellValue("D{$line}", $data["sku_count"]);
+        $excelSheet->setCellValue("E{$line}", $data["gs_count"]);
+        $excelSheet->setCellValue("F{$line}", $data["gb_code"]);
+        $excelSheet->setCellValue("G{$line}", $data["war_code"]);
+        $line++;
+    }
+
+
+}
+
+function exportGoodsData($skucode, $excelSheet)
+{
+
+    global $line;
+    $line++;
+    $excelSheet->setCellValue("A{$line}", "Goods");
+    $line++;
+    $list = M("goods")->where(array("sku_code" => $skucode))->fetchSql(false)->select();
+
+    foreach ($list as $data) {
+        $excelSheet->setCellValue("A{$line}", $data["goods_code"]);
+        $excelSheet->setCellValue("B{$line}", $data["sku_init"]);
+        $excelSheet->setCellValue("C{$line}", $data["goods_init"]);
+        $excelSheet->setCellValue("D{$line}", $data["sku_count"]);
+        $excelSheet->setCellValue("E{$line}", $data["goods_count"]);
+        $excelSheet->setCellValue("F{$line}", $data["war_code"]);
+        $excelSheet->setCellValue("G{$line}", $skucode);
+
+        $skudata = M("sku")->where(array("sku_code" => $skucode))->fetchSql(false)->select();
+        $spucode = $skudata[0]["spu_code"];
+        $spudata = M("spu")->where(array("spu_code" => $spucode))->fetchSql(false)->select();
+        $excelSheet->setCellValue("F{$line}", $spudata[0]["spu_name"]);
+
+        $goodscode = $data["goods_code"];
+        $goodscount = $data["goods_init"];
+
+        $igoods = M("igoods")->where(array("goods_code" => $goodscode))->select();
+        $igoodscount = 0;
+        foreach ($igoods as $item) {
+            $igoodscount += $item["igo_count"];
+        }
+        if ($igoodscount > 0) {
+            //echo "{$goodscount}?={$igoodscount} ".$data["goods_init"]."=". ($goodscount>=$igoodscount?"":"数量错误").PHP_EOL;
+            $excelSheet->setCellValue("L{$line}", ($goodscount >= $igoodscount ? "" : "数量错误"));
+            $excelSheet->setCellValue("M{$line}", ($goodscount >= $igoodscount ? "" : "{$skucode}"));
+        }
+        $line++;
+    }
+    //exit;
+}
+
+
+function exportIgoodsData($skucode, $excelSheet)
+{
+    global $errorcount;
+    global $goodsSkuDict;
+    global $line;
+    $line++;
+    $excelSheet->setCellValue("A{$line}", "Igoods");
+    $line++;
+    $list = M("igoods")->where(array("sku_code" => $skucode,"igo_code"=>array("GT","GO40500000000000")))->select();//,"igo_code"=>array("GT","GO31229000000000")
+
+    foreach ($list as $data) {
+        $orderCode = M("invoice")->where(array("inv_code" => $data['inv_code']))->getField("inv_ecode");
+        $receiver = M("invoice")->where(array("inv_code" => $data['inv_code']))->getField("inv_receiver");
+        $excelSheet->setCellValue("A{$line}", $data["igo_code"]);
+        $excelSheet->setCellValue("B{$line}", $data["sku_count"]);
+        $excelSheet->setCellValue("C{$line}", $data["igo_count"]);
+        $excelSheet->setCellValue("D{$line}", $data["goods_code"]);
+        $excelSheet->setCellValue("E{$line}", $data["war_code"]);
+        $excelSheet->setCellValue("F{$line}", $orderCode);
+        $excelSheet->setCellValue("G{$line}", $receiver);
+//        $igocode = $data["igo_code"];
+//        $igoodscount = $data["igo_count"];
+//        $igoods = M("igoodsent")->where(array("igo_code"=>$igocode))->select();
+//        $igoodsentcount = 0;
+//        foreach ($igoods as $item){
+//            $igoodsentcount+=$item["igs_count"];
+//        }
+//        $excelSheet->setCellValue("J{$line}", ($igoodscount==$igoodsentcount?"":"错误"));
+//        $excelSheet->setCellValue("K{$line}", ($igoodscount==$igoodsentcount?"":"{$skucode}"));
+//        $excelSheet->setCellValue("L{$line}", ($igoodscount==$igoodsentcount?"":"{$igocode}"));
+
+        // $invcode = $data["inv_code"];
+        // $invdata = M("invoice")->where(array("invoice.inv_code"=>$invcode))->find();
+        // $ocode = $invdata["inv_ecode"];
+        // $excelSheet->setCellValue("G{$line}", $ocode);
+        // global $goodsSkuDict;
+        // $goodsSkuDict["{$skucode}.{$ocode}"] = 1;
+        $line++;
+    }
+
+}
+
+function exportIgoodsentData($skucode, $excelSheet)
+{
+    global $line;
+    $line++;
+    $excelSheet->setCellValue("A{$line}", "Igoodsent");
+    $line++;
+    $list = M("igoodsent")->where(array("sku_code" => $skucode,"igo_code"=>array("GT","GO40500000000000")))->select();//,"igo_code"=>array("GT","GO31229000000000")
+    $count = 0;
+    foreach ($list as $data) {
+        $excelSheet->setCellValue("A{$line}", $data["igs_code"]);
+        $excelSheet->setCellValue("B{$line}", $data["sku_count"]);
+        $excelSheet->setCellValue("C{$line}", $data["igs_count"]);
+        $excelSheet->setCellValue("D{$line}", $data["gs_code"]);
+        $excelSheet->setCellValue("E{$line}", $data["igo_code"]);
+        $excelSheet->setCellValue("F{$line}", $data["war_code"]);
+        $excelSheet->setCellValue("M{$line}", $data["igs_bprice"]);
+        $count += $data["igo_count"];
+        $line++;
+    }
+    if (empty($list)) {
+        $excelSheet->setCellValue("A{$line}", "错误数据");
+    }
+}
+
+function exportOrderGoodsData($skucode, $excelSheet)
+{
+    global $line;
+    global $goodsSkuDict;
+    $line++;
+    $excelSheet->setCellValue("A{$line}", "OrderGoods");
+    $line++;
+    $list = M("ordergoods")->where(array("sku_code" => $skucode, "goods_code" => array("GT", "G40501000000000")))->select();
+    foreach ($list as $data) {
+        $ocode = $data["order_code"];
+        $order = M("order")->where(array("order_code" => $ocode))->find();
+        if (!empty($order)) {
+//            if ($order["order_status"] == 3 || ($order["order_status"] == 1 && $order["w_order_status"] == 1)) {
+//                continue;
+//            }
+        } else {
+            continue;
+        }
+        $excelSheet->setCellValue("A{$line}", $data["goods_code"]);
+        $excelSheet->setCellValue("B{$line}", $data["sku_init"]);
+        $excelSheet->setCellValue("C{$line}", $data["goods_count"]);
+        $excelSheet->setCellValue("D{$line}", $data["sku_count"]);
+        $excelSheet->setCellValue("E{$line}", $data["w_sku_count"]);
+        $excelSheet->setCellValue("F{$line}", $data["supplier_code"]);
+        $excelSheet->setCellValue("G{$line}", $data["order_code"]);
+        $excelSheet->setCellValue("H{$line}", $data["ot_code"]);
+        $excelSheet->setCellValue("I{$line}", $data["war_code"] . "-" . $order["order_status"]);
+        $excelSheet->setCellValue("L{$line}", $data["spu_sprice"]."(销售价)");
+        $excelSheet->setCellValue("M{$line}", $data["spu_bprice"]);
+
+        $line++;
+    }
+}

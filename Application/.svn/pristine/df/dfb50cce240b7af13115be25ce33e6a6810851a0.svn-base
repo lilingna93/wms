@@ -1,0 +1,278 @@
+<?php
+
+namespace Wms\Dao;
+
+use Common\Common\BaseDao;
+use Common\Common\BaseDaoInterface;
+
+/**
+ * 库存数据
+ * Class OrderDao
+ * @package Wms\Dao
+ */
+class OrderDao extends BaseDao implements BaseDaoInterface
+{
+    private $dbname = "";
+
+    function __construct()
+    {
+        $this->dbname = C("WMS_CLIENT_DBNAME");
+    }
+
+    //添加数据[]
+    public function insert($item)
+    {
+        $code = venus_unique_code("O");
+        $data = array(
+            "order_code" => $code,
+            "order_ctime" => $item["ctime"],
+            "order_pdate" => $item["pdate"],
+            "order_status" => $item["status"],
+            "order_mark" => $item["mark"],
+            "order_tag" => $item["otag"],
+            "is_finalsalesorder" => $item["isfsorder"],//是否是最终销售单1.不是 2.是
+            "order_bprice" => $item["bprice"],     //订单总内部采购价
+            "order_sprice" => $item["sprice"],     //订单总内部销售价
+            "order_sprofit" => $item["sprofit"] || "0",//订单总内部销售利润额
+            "order_cprofit" => $item["cprofit"] || "0",//订单总客户利润额
+            "order_tprice" => $item["tprice"] || "0",//订单总销售价
+            "ot_code" => "",//所属订单任务编号
+            "war_code" => $item["warcode"],
+            "room" => $item["room"],//餐厅
+            "order_is_external" => $item["oisexternal"],
+            "user_code" => $item["ucode"],
+            "is_download" => 1,//是否已经下载
+        );
+        return M("Order")->add($data) ? $code : false;
+    }
+
+    //查询
+    public function queryByCode($code)
+    {
+        $condition = array("order_code" => $code);
+        return M("Order")->alias("o")->field('*,o.user_code,o.war_code')
+            ->join("LEFT JOIN wms_user user ON user.user_code = o.user_code")
+            ->join("LEFT JOIN {$this->dbname}.wms_warehouse war ON war.war_code = o.war_code")
+            ->where($condition)
+            ->fetchSql(false)
+            ->find();
+    }
+
+    //查询
+    public function queryListByCondition($condition, $page = 0, $count = 1000)
+    {
+        $condition = $this->conditionFilter($condition);
+        return M("Order")->alias("o")->field('*,o.user_code,o.war_code')
+            ->join("LEFT JOIN wms_user user ON user.user_code = o.user_code")
+            ->join("LEFT JOIN {$this->dbname}.wms_warehouse war ON war.war_code = o.war_code")
+            ->join("LEFT JOIN {$this->dbname}.wms_worker wor ON wor.wor_token = user.user_token")
+            ->where($condition)->order("order_code desc")
+            ->limit("{$page},{$count}")->fetchSql(false)->select();
+    }
+
+    //总数
+    public function queryCountByCondition($condition)
+    {
+        $condition = $this->conditionFilter($condition);
+        return M("Order")->alias("o")->where($condition)->fetchSql(false)->count();
+    }
+
+    //根据订单任务编号，查询隶属的所有订单
+    public function queryListByOrderTaskCode($code)
+    {
+        $condition = array("ot_code" => $code);
+        return M("Order")->alias("o")->field('*,o.user_code,o.war_code')
+            ->join("LEFT JOIN wms_user user ON user.user_code = o.user_code")
+            ->join("LEFT JOIN {$this->dbname}.wms_warehouse war ON war.war_code = o.war_code")
+            ->where($condition)->order("order_code desc")
+            ->limit(10000)->fetchSql(false)->select();
+    }
+
+    //批量更新otcode
+    public function updateOtCodeByOrderCodes($codes, $otcode)
+    {
+        $condition = array("order_code" => array("IN", $codes));
+        return M("Order")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(),
+                "ot_code" => $otcode));
+    }
+
+    //更新otcode
+    public function updateOtCodeByOrderCode($code, $otcode)
+    {
+        $condition = array("order_code" => $code, "ot_code" => "");
+        return M("Order")->where($condition)
+            ->save(array("timestamp" => venus_current_datetime(),
+                "ot_code" => $otcode));
+    }
+
+    //清除otcode
+    public function clearOtCodeByOtCode($otcode)
+    {
+        $condition = array("ot_code" => $otcode);
+        return M("Order")->where($condition)
+            ->save(array("timestamp" => venus_current_datetime(),
+                "ot_code" => ""));
+    }
+
+    //otcode更新状态
+    public function updateWStatusByOtCode($otcode, $status)
+    {
+        $condition = array("ot_code" => $otcode);
+        return M("Order")->alias("o")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(), "w_order_status" => $status));
+    }
+
+    //更新状态
+    public function updateWStatusByCode($code, $status)
+    {
+        $condition = array("order_code" => $code);
+        return M("Order")->alias("o")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(), "w_order_status" => $status));
+    }
+
+    //更新状态
+    public function updateStatusByCode($code, $status)
+    {
+        $condition = array("order_code" => $code);
+        return M("Order")->alias("o")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(), "order_status" => $status));
+    }
+
+    //更新状态
+    public function updateWStatusByCodes($codes, $status)
+    {
+        $condition = array("order_code" => array("IN", $codes));
+        return M("Order")->alias("o")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(), "w_order_status" => $status));
+    }
+
+    //更新备注
+    public function updateMarkByCode($code, $mark)
+    {
+        $condition = array("order_code" => $code);
+        return M("Order")->alias("o")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(), "order_mark" => $mark));
+    }
+
+    //更新是否是最新销售单值
+    public function updateIsFinalSalesOrderByCode($code, $isfsorder)
+    {
+        $condition = array("order_code" => $code);
+        return M("Order")->alias("o")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(), "is_finalsalesorder" => $isfsorder));
+    }
+
+    //更新是否已经下载
+    public function updateIsDownloadByCode($code, $isdownload)
+    {
+        $condition = array("order_code" => $code);
+        return M("Order")->alias("o")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(), "is_download" => $isdownload));
+    }
+
+    public function updatePriceByCode($code, $bprice, $sprice, $sprofit, $cprofit, $tprice)
+    {//内部采购价格，内部销售价格，外部销售利润，内部销售利润可以动态= 内部销售价格 - 内部采购价格
+        $condition = array("order_code" => $code);
+        return M("Order")->where($condition)->fetchSql(false)
+            ->save(array("timestamp" => venus_current_datetime(), "order_bprice" => $bprice, "order_sprice" => $sprice,
+                "order_sprofit" => $sprofit, "order_cprofit" => $cprofit, "order_tprice" => $tprice));
+    }
+
+    public function queryPdateListByOcodes($codes)
+    {
+        $condition = array("order_code" => array("IN", $codes));
+        return M("Order")->where($condition)->fetchSql(false)->select();
+    }
+
+    //删除订单
+    public function deleteByCode($code)
+    {
+        $condition = array("order_code" => $code);
+        return M("Order")->where($condition)->fetchSql(false)->delete();
+    }
+
+    //查询条件过滤[ucode,warcode,pdate,ctime,sctime,ectime,status]
+    private function conditionFilter($cond)
+    {
+        $condition = array();
+        if (isset($cond["ucode"]) && !empty($cond["ucode"])) {
+            $condition["user_code"] = $cond["ucode"];
+        }
+        if (isset($cond["warcode"]) && !empty($cond["warcode"])) {
+            $condition["o.war_code"] = $cond["warcode"];
+        }
+        if (isset($cond["pdate"]) && !empty($cond["pdate"])) {
+            $condition["order_pdate"] = $cond["pdate"];
+        }
+        if (isset($cond["ctime"]) && !empty($cond["ctime"])) {
+            $condition["order_ctime"] = $cond["ctime"];
+        }
+
+        if (isset($cond["sctime"]) && isset($cond["ectime"])) {
+            $condition["order_ctime"] = array(
+                array('EGT', $cond["sctime"]),
+                array('ELT', $cond["ectime"]),
+                'AND'
+            );
+        } else if (isset($cond["sctime"])) {
+            $condition["order_ctime"] = array("EGT", $cond["sctime"]);
+        } else if (isset($cond["ectime"])) {
+            $condition["order_ctime"] = array("ELT", $cond["ectime"]);
+        }
+
+        if (isset($cond["status"]) && !empty($cond["status"])) {
+            $condition["order_status"] = $cond["status"];
+        }
+
+        if (isset($cond["wstatus"]) && !empty($cond["wstatus"])) {
+            $condition["w_order_status"] = $cond["wstatus"];
+        }
+        if (isset($cond["otcode"]) && !empty($cond["otcode"])) {
+            $condition["ot_code"] = $cond["otcode"];
+        }
+        if (isset($cond["spuType"]) && !empty($cond["spuType"])) {
+            $condition["spu_type"] = $cond["spuType"];
+        }
+        if (isset($cond["oCode"]) && !empty($cond["oCode"])) {
+            $condition["o.order_code"] = $cond["oCode"];
+        }
+        if (isset($cond["oCodes"]) && !empty($cond["oCodes"])) {
+            $condition["o.order_code"] = array("in", $cond["oCodes"]);
+        }
+        if (isset($cond["isfsorder"]) && !empty($cond["isfsorder"])) {
+            $condition["o.is_finalsalesorder"] = $cond["isfsorder"];
+        }
+        if (isset($cond["isdownload"]) && !empty($cond["isdownload"])) {
+            $condition["o.is_download"] = $cond["isdownload"];
+        }
+        return $condition;
+    }
+
+
+    //查询所有已完成的订单（报表汇总）
+    public function queryAllList()
+    {
+        $condition = array("order_status" => 2);
+        return M("Order")->alias("o")->field('*,o.user_code,o.war_code')
+            ->join("LEFT JOIN wms_user user ON user.user_code = o.user_code")
+            ->join("LEFT JOIN {$this->dbname}.wms_warehouse war ON war.war_code = o.war_code")
+            ->where($condition)
+            ->fetchSql(false)->limit(10000)
+            ->select();
+    }
+
+    //查询所有订单及货品数据2018-10-29
+    public function queryListToOrdergoodsByTime($condition)
+    {
+        $condition = $this->conditionFilter($condition);
+        return M("Order")->alias('o')->field('*,goods.spu_bprice,goods.spu_sprice,goods.profit_price')
+            ->join("LEFT JOIN wms_ordergoods goods ON goods.order_code = o.order_code")
+            ->join("LEFT JOIN {$this->dbname}.wms_warehouse war ON war.war_code = o.war_code")
+            ->join("LEFT JOIN wms_sku sku ON sku.sku_code = goods.sku_code")
+            ->join("LEFT JOIN wms_spu spu ON spu.spu_code = goods.spu_code")
+            ->join("LEFT JOIN wms_supplier sup ON sup.sup_code = spu.sup_code")
+            ->join("LEFT JOIN wms_user user ON user.user_code = o.user_code")
+            ->where($condition)->order('goods.goods_code')->fetchSql(false)->select();
+    }
+}
