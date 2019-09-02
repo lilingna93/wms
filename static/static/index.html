@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title></title>
+  <style>
+    .chromeframe {
+      margin: .2em 0;
+      background: #ccc;
+      color: #000;
+      padding: .2em 0
+    }
+
+    #loader-wrapper {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 999999
+    }
+
+    #loader {
+      display: block;
+      position: relative;
+      left: 50%;
+      top: 50%;
+      width: 150px;
+      height: 150px;
+      margin: -75px 0 0 -75px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      border-top-color: #FFF;
+      -webkit-animation: spin 2s linear infinite;
+      -ms-animation: spin 2s linear infinite;
+      -moz-animation: spin 2s linear infinite;
+      -o-animation: spin 2s linear infinite;
+      animation: spin 2s linear infinite;
+      z-index: 1001
+    }
+
+    #loader:before {
+      content: "";
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      right: 5px;
+      bottom: 5px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      border-top-color: #FFF;
+      -webkit-animation: spin 3s linear infinite;
+      -moz-animation: spin 3s linear infinite;
+      -o-animation: spin 3s linear infinite;
+      -ms-animation: spin 3s linear infinite;
+      animation: spin 3s linear infinite
+    }
+
+    #loader:after {
+      content: "";
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      right: 15px;
+      bottom: 15px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      border-top-color: #FFF;
+      -moz-animation: spin 1.5s linear infinite;
+      -o-animation: spin 1.5s linear infinite;
+      -ms-animation: spin 1.5s linear infinite;
+      -webkit-animation: spin 1.5s linear infinite;
+      animation: spin 1.5s linear infinite
+    }
+
+    @-webkit-keyframes spin {
+      0% {
+        -webkit-transform: rotate(0deg);
+        -ms-transform: rotate(0deg);
+        transform: rotate(0deg)
+      }
+      100% {
+        -webkit-transform: rotate(360deg);
+        -ms-transform: rotate(360deg);
+        transform: rotate(360deg)
+      }
+    }
+
+    @keyframes spin {
+      0% {
+        -webkit-transform: rotate(0deg);
+        -ms-transform: rotate(0deg);
+        transform: rotate(0deg)
+      }
+      100% {
+        -webkit-transform: rotate(360deg);
+        -ms-transform: rotate(360deg);
+        transform: rotate(360deg)
+      }
+    }
+
+    #loader-wrapper .loader-section {
+      position: fixed;
+      top: 0;
+      width: 51%;
+      height: 100%;
+      background: #2095f2;
+      z-index: 1000;
+      -webkit-transform: translateX(0);
+      -ms-transform: translateX(0);
+      transform: translateX(0)
+    }
+
+    #loader-wrapper .loader-section.section-left {
+      left: 0
+    }
+
+    #loader-wrapper .loader-section.section-right {
+      right: 0
+    }
+
+    .loaded #loader-wrapper .loader-section.section-left {
+      -webkit-transform: translateX(-100%);
+      -ms-transform: translateX(-100%);
+      transform: translateX(-100%);
+      -webkit-transition: all .7s .3s cubic-bezier(0.645, 0.045, 0.355, 1.000);
+      transition: all .7s .3s cubic-bezier(0.645, 0.045, 0.355, 1.000)
+    }
+
+    .loaded #loader-wrapper .loader-section.section-right {
+      -webkit-transform: translateX(100%);
+      -ms-transform: translateX(100%);
+      transform: translateX(100%);
+      -webkit-transition: all .7s .3s cubic-bezier(0.645, 0.045, 0.355, 1.000);
+      transition: all .7s .3s cubic-bezier(0.645, 0.045, 0.355, 1.000)
+    }
+
+    .loaded #loader {
+      opacity: 0;
+      -webkit-transition: all .3s ease-out;
+      transition: all .3s ease-out
+    }
+
+    .loaded #loader-wrapper {
+      visibility: hidden;
+      -webkit-transform: translateY(-100%);
+      -ms-transform: translateY(-100%);
+      transform: translateY(-100%);
+      -webkit-transition: all .3s 1s ease-out;
+      transition: all .3s 1s ease-out
+    }
+
+    .no-js #loader-wrapper {
+      display: none
+    }
+
+    .no-js h1 {
+      color: #222
+    }
+
+    #loader-wrapper .load_title {
+      font-family: 'Open Sans';
+      color: #FFF;
+      font-size: 19px;
+      width: 100%;
+      text-align: center;
+      z-index: 9999999999999;
+      position: absolute;
+      top: 60%;
+      opacity: 1;
+      line-height: 30px
+    }
+
+    #loader-wrapper .load_title span {
+      font-weight: normal;
+      font-style: italic;
+      font-size: 13px;
+      color: #FFF;
+      opacity: .5
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/iview/2.14.3/styles/iview.css">
+</head>
+<body>
+<div id="app">
+  <div id="loader-wrapper">
+    <div id="loader"></div>
+    <div class="loader-section section-left"></div>
+    <div class="loader-section section-right"></div>
+    <div class="load_title">正在加载<br><span>至味团餐供应系统</span></div>
+  </div>
+</div>
+<script>
+  var config='{$config}';
+  // var config = '{"appname":"\u4f9b\u5e94\u94fe\u4ed3\u5e93\u7cfb\u7edf","host":"dev.shijijiaming.cn","receipt_type":[{"code":"1","label":"\u91c7\u8d2d\u5165\u4ed3"},{"code":"2","label":"\u9000\u8d27\u5165\u4ed3"}],"invoice_type":[{"code":"4","label":"\u9500\u552e\u51fa\u4ed3"},{"code":"5","label":"\u9886\u7528\u51fa\u4ed3"},{"code":"6","label":"\u9000\u8d27\u51fa\u4ed3"},{"code":"7","label":"\u635f\u8017\u51fa\u4ed3"}],"user":{"name":"sunweiting","code":"WO30817165026600","auth":"32767","rname":"\u5b59\u709c\u5a77","token":"a87ff679a2f3e71d9181a67b7542122c","phone":"","warcode":"WA000001","warname":"\u79d1\u8d38\u4f9b\u5e94\u94fe\u4ed3\u5e93","houseType":false},"warehouse":[{"id":"2","war_code":"WA100002","war_name":"\u5b8b\u5e86\u9f84\u57fa\u91d1\u4f1a\u9879\u76ee\u7ec4\u4ed3\u5e93","war_info":"\u4f73\u660e\u5b8b\u57fa\u4f1a\u9879\u76ee","war_address":"\u5317\u4eac\u5e02\u6d77\u6dc0\u533a\u77e5\u6625\u8def","war_postal":"100014"},{"id":"1","war_code":"WA100001","war_name":"\u4e2d\u592e\u515a\u6821\u98df\u5802\u9879\u76ee\u7ec4\u4ed3\u5e93","war_info":"\u4f73\u660e\u4e2d\u592e\u515a\u6821\u9879\u76ee","war_address":"\u5317\u4eac\u5e02\u671d\u9633\u533a\u4eae\u9a6c\u6865","war_postal":"100013"}],"type":{"0":"\u5168\u90e8","102":"\u7c73\u9762\u7cae\u6cb9","104":"\u8c03\u5473\u5e72\u8d27","106":"\u9152\u6c34\u996e\u6599","108":"\u732a\u725b\u7f8a\u8089","110":"\u9e21\u9e2d\u79bd\u86cb","112":"\u6c34\u4ea7\u51bb\u8d27","114":"\u4f11\u95f2\u98df\u54c1"},"subtype":{"0":["\u5168\u90e8"],"102":{"0":"\u5168\u90e8","10201":"\u98df\u7528\u6cb9","10202":"\u7c73","10203":"\u9762\u7c89","10204":"\u6742\u7cae"},"104":{"0":"\u5168\u90e8","10401":"\u8c03\u5473\u6c41","10402":"\u8c03\u5473\u9171","10403":"\u8c03\u5473\u6599","10404":"\u9999\u8f9b\u6599","10405":"\u5e72\u8d27","10406":"\u814c\u5236\u54c1","10407":"\u5176\u4ed6\u8c03\u6599"},"106":{"0":"\u5168\u90e8","10601":"\u6c34\u996e\u6599","10602":"\u9152\u7c7b"},"108":{"0":"\u5168\u90e8","10801":"\u732a\u8089","10802":"\u725b\u8089","10803":"\u7f8a\u8089","10804":"\u5176\u4ed6"},"110":{"0":"\u5168\u90e8","11001":"\u732a\u8089","11002":"\u725b\u8089","11003":"\u7f8a\u8089","11004":"\u5176\u4ed6"},"112":{"0":"\u5168\u90e8","11201":"\u6d77\u9c9c\u6c34\u4ea7","11202":"\u51b7\u51bb\u9762\u70b9","11203":"\u51b7\u51bb\u852c\u83dc","11204":"\u706b\u817f\u9999\u80a0","11205":"\u5176\u4ed6"},"114":{"0":"\u5168\u90e8","11401":"\u5c0f\u98df\u54c1"}}}';
+  config = JSON.parse(config);
+  var auth = config.user.auth;
+  var houseType = config.user.houseType;
+  var type = config.type;
+  var subType = config.subtype;
+  var warehouse = config.warehouse;
+  var host = config.host;
+  var receipt_type = config.receipt_type;
+  var invoice_type = config.invoice_type;
+  window.onload = function () {
+    document.getElementById('app').className = "loaded";
+  }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.5.20/vue.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.18.0/axios.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/iview/2.14.3/iview.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qs/6.5.2/qs.min.js"></script>
+<!-- built files will be auto injected -->
+</body>
+</html>
